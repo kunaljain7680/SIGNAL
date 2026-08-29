@@ -1,0 +1,1 @@
+from app.models.technology import Technology
