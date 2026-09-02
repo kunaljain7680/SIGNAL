@@ -28,6 +28,11 @@ async def create_technology(tech_in: TechnologyCreate, db: AsyncSession = Depend
             detail="A technology with this canonical_name or slug already exists."
         )
 
+@router.get("/", response_model=list[TechnologyResponse])
+async def list_technologies(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Technology))
+    return result.scalars().all()
+
 @router.get("/{technology_id}", response_model=TechnologyResponse)
 async def get_technology(technology_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Technology).filter(Technology.id == technology_id))
