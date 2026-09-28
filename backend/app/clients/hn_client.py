@@ -32,6 +32,26 @@ class HackerNewsClient:
 
         return response.json()
 
+    async def search_stories(
+        self,
+        query: str,
+        start_timestamp: int,
+        end_timestamp: int,
+        hits_per_page: int = 100,
+    ) -> dict[str, Any]:
+        params = {
+            "query": query,
+            "tags": "story",
+            "numericFilters": f"created_at_i>={start_timestamp},created_at_i<{end_timestamp}",
+            "hitsPerPage": hits_per_page,
+        }
+        
+        # Passing an absolute URL in httpx automatically overrides the client's Firebase base_url
+        response = await self.client.get("https://hn.algolia.com/api/v1/search", params=params)
+        response.raise_for_status()
+        
+        return response.json()
+    
     async def aclose(self):
         """
         Properly closes the underlying HTTP connections.
