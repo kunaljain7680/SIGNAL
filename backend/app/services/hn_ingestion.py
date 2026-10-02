@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,7 +61,7 @@ async def ingest_hn_search(
     start_timestamp: int,
     end_timestamp: int,
     hits_per_page: int = 100,
-) -> None:
+) -> list[uuid.UUID]:
     # Look up the Hacker News source dynamically
     result = await db.execute(
         select(Source).where(Source.name == "Hacker News", Source.type == "hn")
@@ -71,6 +73,7 @@ async def ingest_hn_search(
 
     client = HackerNewsClient()
     events_to_insert = []
+    native_ids = []
 
     try:
         search_result = await client.search_stories(
@@ -81,11 +84,13 @@ async def ingest_hn_search(
         )
 
         for hit in search_result.get("hits", []):
+            native_id = str(hit["objectID"])
             events_to_insert.append({
                 "source_id": hn_source.id,
-                "source_native_id": str(hit["objectID"]),
+                "source_native_id": native_id,
                 "raw_payload": hit,
             })
+            native_ids.append(native_id)
 
         if events_to_insert:
             stmt = insert(SourceEvent).values(events_to_insert)
@@ -95,6 +100,16 @@ async def ingest_hn_search(
 
             await db.execute(stmt)
             await db.commit()
+
+            # Retrieve the UUIDs for all processed items (both new and pre-existing)
+            select_stmt = select(SourceEvent.id).where(
+                SourceEvent.source_id == hn_source.id,
+                SourceEvent.source_native_id.in_(native_ids)
+            )
+            id_result = await db.execute(select_stmt)
+            return list(id_result.scalars().all())
+
+        return []
 
     finally:
         await client.aclose()
