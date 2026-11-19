@@ -35,7 +35,7 @@ alembic upgrade head
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Serve the dashboard in a third terminal:
+Save the supplied Phase 1 dashboard HTML as `frontend/index.html` in the repository. Then serve the dashboard in a third terminal:
 
 ```powershell
 cd F:\SIGNAL\frontend
