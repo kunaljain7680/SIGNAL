@@ -1,10 +1,11 @@
+import argparse
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 from typing import Any
 
-# Ensure `app` is importable when running `python scripts/run_hn_pipeline.py` from `backend/`
+# Ensure app is importable when running this script from backend/.
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -27,11 +28,11 @@ async def run_hn_pipeline(
     hits_per_page: int = 100,
 ) -> dict[str, Any]:
     """
-    Executes the Phase 1 Hacker News pipeline for a single technology:
+    Executes the Phase 1 Hacker News pipeline for one technology:
     1. Resolves the Technology row by canonical_name.
-    2. Defines a single timezone-aware 7-day UTC window.
+    2. Defines a single timezone-aware seven-day UTC window.
     3. Ingests raw HN search hits and normalizes them.
-    4. Counts 7-day normalized HN events and calculates the hn_v0 score.
+    4. Counts seven-day normalized HN events and calculates the hn_v0 score.
     5. Persists a SignalSnapshot row.
     """
     if window_end is None:
@@ -48,7 +49,7 @@ async def run_hn_pipeline(
     if technology is None:
         raise ValueError(f"Technology '{canonical_name}' not found in the database.")
 
-    # Extract scalar attributes before downstream services call db.commit()
+    # Extract scalar attributes before downstream services commit transactions.
     technology_id = technology.id
     technology_name = technology.canonical_name
 
@@ -98,9 +99,34 @@ async def run_hn_pipeline(
     }
 
 
-async def main() -> None:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Manually run the Phase 1 HN pipeline for one seeded technology."
+    )
+    parser.add_argument(
+        "--technology",
+        default="FastAPI",
+        help="Exact canonical technology name from the seeded catalogue (default: FastAPI).",
+    )
+    parser.add_argument(
+        "--hits-per-page",
+        type=int,
+        default=100,
+        help="Maximum HN Algolia hits requested for this technology (default: 100).",
+    )
+    return parser.parse_args(argv)
+
+
+async def main(
+    canonical_name: str = "FastAPI",
+    hits_per_page: int = 100,
+) -> None:
     async with AsyncSessionLocal() as db:
-        summary = await run_hn_pipeline(db=db, canonical_name="FastAPI")
+        summary = await run_hn_pipeline(
+            db=db,
+            canonical_name=canonical_name,
+            hits_per_page=hits_per_page,
+        )
 
     print(
         f"Completed HN pipeline for {summary['canonical_name']} "
@@ -115,4 +141,10 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    args = parse_args()
+    asyncio.run(
+        main(
+            canonical_name=args.technology,
+            hits_per_page=args.hits_per_page,
+        )
+    )

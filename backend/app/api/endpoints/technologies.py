@@ -1,13 +1,17 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db
+from app.models.normalized_event import NormalizedEvent
 from app.models.signal_snapshot import SignalSnapshot
+from app.models.source import Source
+from app.models.source_event import SourceEvent
 from app.models.technology import Technology
+from app.schemas.evidence import TechnologyEvidenceResponse
 from app.schemas.signal_snapshot import TechnologySignalResponse
 from app.schemas.technology import TechnologyCreate, TechnologyResponse
 
@@ -36,7 +40,7 @@ async def create_technology(
 
 @router.get("/", response_model=list[TechnologyResponse])
 async def list_technologies(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Technology))
+    result = await db.execute(select(Technology).order_by(Technology.canonical_name))
     return result.scalars().all()
 
 
@@ -103,3 +107,57 @@ async def get_technology_signal(
         window_end=snapshot.window_end,
         computed_at=snapshot.computed_at,
     )
+
+
+@router.get(
+    "/{technology_id}/evidence",
+    response_model=list[TechnologyEvidenceResponse],
+)
+async def get_technology_evidence(
+    technology_id: uuid.UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return stored evidence and its source identity without recomputing a signal."""
+    technology_result = await db.execute(
+        select(Technology.id).where(Technology.id == technology_id)
+    )
+    if technology_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Technology not found.",
+        )
+
+    evidence_result = await db.execute(
+        select(NormalizedEvent, SourceEvent, Source)
+        .join(
+            SourceEvent,
+            NormalizedEvent.source_event_id == SourceEvent.id,
+        )
+        .join(
+            Source,
+            SourceEvent.source_id == Source.id,
+        )
+        .where(NormalizedEvent.technology_id == technology_id)
+        .order_by(
+            NormalizedEvent.occurred_at.desc(),
+            NormalizedEvent.id.desc(),
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+
+    return [
+        TechnologyEvidenceResponse(
+            normalized_event_id=normalized_event.id,
+            source_name=source.name,
+            source_type=source.type,
+            source_native_id=source_event.source_native_id,
+            summary_text=normalized_event.summary_text,
+            source_url=normalized_event.source_url,
+            occurred_at=normalized_event.occurred_at,
+            fetched_at=source_event.fetched_at,
+        )
+        for normalized_event, source_event, source in evidence_result.all()
+    ]
