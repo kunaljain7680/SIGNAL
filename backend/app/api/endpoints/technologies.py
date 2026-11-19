@@ -11,9 +11,14 @@ from app.models.signal_snapshot import SignalSnapshot
 from app.models.source import Source
 from app.models.source_event import SourceEvent
 from app.models.technology import Technology
+from app.schemas.domain_relevance import (
+    DomainRelevanceRequest,
+    TechnologyDomainRelevanceResponse,
+)
 from app.schemas.evidence import TechnologyEvidenceResponse
 from app.schemas.signal_snapshot import TechnologySignalResponse
 from app.schemas.technology import TechnologyCreate, TechnologyResponse
+from app.services.domain_relevance import calculate_domain_relevance
 
 router = APIRouter()
 
@@ -42,6 +47,42 @@ async def create_technology(
 async def list_technologies(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Technology).order_by(Technology.canonical_name))
     return result.scalars().all()
+
+
+@router.post(
+    "/domain-relevance",
+    response_model=list[TechnologyDomainRelevanceResponse],
+)
+async def preview_domain_relevance(
+    profile: DomainRelevanceRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Preview Phase 1 domain-only relevance for the active technology catalogue.
+
+    Profile input is supplied with this request and is not persisted. The
+    signal score remains a separately computed, persisted SignalSnapshot.
+    """
+    result = await db.execute(
+        select(Technology)
+        .where(Technology.status == "active")
+        .order_by(Technology.canonical_name)
+    )
+    technologies = result.scalars().all()
+
+    return [
+        TechnologyDomainRelevanceResponse(
+            technology_id=technology.id,
+            canonical_name=technology.canonical_name,
+            domain_tags=technology.domain_tags,
+            domain_relevance=calculate_domain_relevance(
+                technology_domain_tags=technology.domain_tags,
+                target_domains=profile.target_domains,
+                interests=profile.interests,
+            ),
+        )
+        for technology in technologies
+    ]
 
 
 @router.get("/{technology_id}", response_model=TechnologyResponse)
