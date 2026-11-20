@@ -59,10 +59,27 @@ Phase 2 records source-specific run start, completion, or failure and ensures on
 **Migration:** `f0a2b43c1d7e` follows `c7d91a4e2f60`.
 
 **Verification status:**
-- GitHub file writes: not yet performed at the time this entry was drafted.
+- GitHub commit: `a55b2034130c336a1e1515129babd2652f61dade`; changed files were re-read from the remote branch after commit.
 - Automated tests: not run in the user's local environment.
 - Migration: not applied to any database.
 - External provider integration: not yet tested.
 - Local manual verification: pending user-provided Git and Alembic state.
 
 No Phase 2 acceptance criterion is marked complete by this schema-only unit.
+
+
+### 2026-11-21 — common connector contract and HN adapter
+
+**Implemented in this unit:**
+- Added shared `Cursor`, `RawEvent`, `SourceHealth`, `RateLimitConfig`, and `AuthConfig` types plus the original `SourceConnector` protocol.
+- Added an HN connector that uses per-keyword timestamp watermarks and date-sorted pagination.
+- Extended the existing Algolia client with a separate date-sorted paged method; the Phase 1 relevance-sorted method is unchanged.
+- Deduplicated overlapping hits across tracked keywords in the connector result.
+- Kept cursor advancement in memory until every keyword/page fetch succeeds.
+- Aligned the SQLAlchemy `IngestionRun` model check constraint with the migration's new `FAILED` status.
+
+**Verification status:**
+- Connector and HN pagination tests were added; they have not been run locally.
+- The existing Phase 1 pipeline is not changed by this adapter.
+- Database integration and event/cursor atomicity are not yet implemented or verified.
+- No migration has been applied.
