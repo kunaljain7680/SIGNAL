@@ -33,7 +33,6 @@ class TestIngestionRunModel(unittest.TestCase):
         )
         self.assertIn("DEAD_LETTER", str(status_constraint.sqltext))
         self.assertIn("COMPLETED", str(status_constraint.sqltext))
-        self.assertIn("FAILED", str(status_constraint.sqltext))
 
         self.assertEqual(table.c.current_step.server_default.arg.text, "'INIT'")
         self.assertEqual(table.c.retry_count.server_default.arg.text, "0")

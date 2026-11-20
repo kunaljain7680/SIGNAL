@@ -21,25 +21,36 @@ class IngestionRun(Base):
         ForeignKey("sources.id"),
         nullable=False,
     )
-    status: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
     current_step: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default=text("'INIT'")
+        Text,
+        nullable=False,
+        server_default=text("'INIT'"),
     )
     started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("now()")
+        DateTime(timezone=True),
+        server_default=text("now()"),
     )
     completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     retry_count: Mapped[int] = mapped_column(
-        Integer, server_default=text("0")
+        Integer,
+        server_default=text("0"),
     )
 
     __table_args__ = (
         CheckConstraint(
             "status IN ('PENDING', 'FETCHING', 'NORMALIZING', "
-            "'COMPLETED', 'FAILED', 'RETRYING', 'DEAD_LETTER')",
+            "'COMPLETED', 'RETRYING', 'DEAD_LETTER')",
             name="check_ingestion_run_status",
         ),
     )

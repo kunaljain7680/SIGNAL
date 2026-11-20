@@ -64,27 +64,6 @@ Replace `FastAPI` with an exact `canonical_name` from the seeded catalogue to ru
 
 The API enables CORS only for the two local dashboard origins used above (`127.0.0.1:5500` and `localhost:5500`).
 
-
-## Phase 2 — Run real source ingestion manually
-
-The shared Phase 2 runner fetches raw evidence independently from the active Hacker News, GitHub, and Remotive sources. It records each attempt in `ingestion_runs`, writes raw source events idempotently, and advances the source cursor in the same database transaction.
-
-From the backend directory, with the repository virtual environment active:
-
-```powershell
-cd F:\SIGNAL\backend
-.\venv\Scripts\Activate.ps1
-python scripts/run_ingestion.py --source all
-```
-
-Run one source in isolation with `--source hn`, `--source github`, or `--source jobs`. GitHub requires a read-only token supplied through the `GITHUB_TOKEN` environment variable. Do not put API tokens in `sources.config` or commit them.
-
-Remotive's public API returns its active remote-jobs feed and does not document a server-side incremental cursor. SIGNAL therefore fetches it at most once per 20-hour window, filters against the tracked technology names, and applies a local publication-date watermark with a one-day overlap. **Coverage is remote-only**; this source does not represent onsite/hybrid postings. Remotive states that listings are delayed by 24 hours. When job evidence is displayed, it must be attributed to Remotive and link to the original Remotive listing.
-
-### GitHub Actions scheduling
-
-The scheduled workflow is in `.github/workflows/signal-ingestion.yml`. It expects the repository secrets `SIGNAL_DATABASE_URL` and `SIGNAL_GITHUB_TOKEN`. The workflow is prepared on the implementation branch, but GitHub runs scheduled workflows only when the workflow file exists on the default branch. Since `main` is intentionally untouched, the cloud schedule will not activate until a future, explicitly approved merge. The GitHub-hosted runner also cannot reach the local Docker PostgreSQL container; `SIGNAL_DATABASE_URL` must point to a reachable hosted PostgreSQL database before cloud execution can succeed. Local manual execution remains available now.
-
 ## Run tests
 
 ```powershell
