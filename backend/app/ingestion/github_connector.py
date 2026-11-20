@@ -17,15 +17,15 @@ from app.ingestion.contracts import (
 
 class GitHubConnector:
     """
-    Collect repository snapshots and releases for the tracked technology
-    topics. Repository and release ETags are persisted in the source cursor.
+    Collect repository snapshots and releases for tracked technology topics.
+    Repository and release ETags are persisted in the source cursor.
     """
 
     def __init__(
         self,
         source_id: uuid.UUID,
         technology_topics: list[str],
-        token: str,
+        token: str | None = None,
         client: Any | None = None,
         max_repositories_per_topic: int = 10,
     ) -> None:
@@ -44,10 +44,16 @@ class GitHubConnector:
             raise ValueError("GitHub technology topics must not be empty.")
 
         self.max_repositories_per_topic = max_repositories_per_topic
-        self._owns_client = client is None
-        self.client = client or GitHubClient(token=token)
+        self._owns_client = client is None and bool(token)
+        self.client = client or (GitHubClient(token=token) if token else None)
 
     async def fetch_since(self, cursor: Cursor) -> list[RawEvent]:
+        if self.client is None:
+            raise RuntimeError(
+                "GitHub ingestion requires GITHUB_TOKEN. Configure it as an "
+                "environment variable; secrets are not stored in sources.config."
+            )
+
         next_state = deepcopy(cursor.state)
         github_state = next_state.setdefault("github", {})
         topic_state = github_state.setdefault("topics", {})
@@ -91,9 +97,7 @@ class GitHubConnector:
         raw_events: dict[str, RawEvent] = {}
 
         for repository_key, topic_and_name in repo_topics.items():
-            full_name = next(
-                value for value in topic_and_name if "/" in value
-            )
+            full_name = next(value for value in topic_and_name if "/" in value)
             state = repository_state.setdefault(repository_key, {})
             repository_response = await self.client.get(
                 f"/repos/{full_name}",
@@ -156,14 +160,17 @@ class GitHubConnector:
         return list(raw_events.values())
 
     def health_check(self) -> SourceHealth:
+        if self.client is None:
+            return SourceHealth(
+                status="down",
+                message="GITHUB_TOKEN is not configured.",
+            )
         return SourceHealth(
             status="unknown",
             message="No live GitHub request performed by configuration check.",
         )
 
     def rate_limit_config(self) -> RateLimitConfig:
-        # GitHub Search has a separate lower quota; search calls are spaced
-        # by the client. Core API response headers are tracked on every call.
         return RateLimitConfig(
             requests_per_window=5000,
             window_seconds=3600,
@@ -177,5 +184,5 @@ class GitHubConnector:
         )
 
     async def aclose(self) -> None:
-        if self._owns_client:
+        if self._owns_client and self.client is not None:
             await self.client.aclose()

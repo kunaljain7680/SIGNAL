@@ -116,3 +116,23 @@ No Phase 2 acceptance criterion is marked complete by this schema-only unit.
 - Remotive parsing, watermark, request guard and keyword-filter tests were added; they have not been run locally.
 - No live Remotive API call has yet been verified from the application.
 - The connector is not yet wired into the database-backed ingestion-run executor.
+
+
+### 2026-11-21 — shared ingestion executor and scheduled entry point
+
+**Implemented in this unit:**
+- Added a database-backed runner that records `PENDING → FETCHING → COMPLETED/FAILED` lifecycle state.
+- Added PostgreSQL idempotent raw-event inserts using the existing `(source_id, source_native_id)` unique constraint.
+- Added a compare-and-swap update against the previous `sources.cursor_state`; raw inserts, cursor advancement, source health, and run completion commit in one transaction.
+- On fetch/persistence failure, the transaction is rolled back and the run is marked `FAILED` in a separate transaction. A later source is still attempted.
+- Added source records for GitHub and Remotive through a follow-up seed migration.
+- Added a manual CLI and a GitHub Actions schedule workflow.
+- Added database integration tests for double-fetch idempotency and per-source failure isolation.
+
+**Scheduling limitation:** the GitHub Actions workflow is committed to the implementation branch. It will not run on a cron schedule until it is present on the repository default branch. `main` remains untouched; no merge has been made.
+
+**Verification status:**
+- Code was committed remotely; tests have not been executed locally.
+- The database integration tests require PostgreSQL and the Phase 2 migrations to be applied.
+- No migration has been applied by this implementation.
+- The GitHub Actions workflow has not been run; the required repository secrets and default-branch activation are not yet configured.
