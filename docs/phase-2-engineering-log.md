@@ -100,3 +100,19 @@ No Phase 2 acceptance criterion is marked complete by this schema-only unit.
 - External GitHub API integration has not yet been tested.
 - The connector is not yet wired into the database-backed ingestion-run executor.
 - No Phase 2 acceptance criterion is marked complete by this unit alone.
+
+
+### 2026-11-21 — Remotive Jobs connector
+
+**Implemented in this unit:**
+- Added the public Remotive API client at the documented `/api/remote-jobs` endpoint.
+- Added local filtering against tracked technology names while preserving each raw job object as the stored payload.
+- Added a seven-day initial lookback and a publication-date watermark with a one-day overlap.
+- Added a 20-hour local fetch guard so manual reruns do not repeatedly call the provider; the scheduled workflow is intended to run once per day.
+- Added the special-case Go language matcher to reduce false positives from the ordinary English word "go".
+- Kept the provider response contract honest: a full active-jobs feed is fetched; no undocumented since_id/page parameter is used.
+
+**Verification status:**
+- Remotive parsing, watermark, request guard and keyword-filter tests were added; they have not been run locally.
+- No live Remotive API call has yet been verified from the application.
+- The connector is not yet wired into the database-backed ingestion-run executor.
