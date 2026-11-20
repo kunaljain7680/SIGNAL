@@ -136,3 +136,20 @@ No Phase 2 acceptance criterion is marked complete by this schema-only unit.
 - The database integration tests require PostgreSQL and the Phase 2 migrations to be applied.
 - No migration has been applied by this implementation.
 - The GitHub Actions workflow has not been run; the required repository secrets and default-branch activation are not yet configured.
+
+
+## Additional implementation limits recorded during review
+
+- GitHub repository search is bounded to the ten most recently updated results per tracked topic. The connector fetches the repository snapshot and latest ten releases for each returned repository. This is an intentional initial request-volume bound, not a claim that all repositories/releases for a technology have been enumerated.
+- Repository snapshots preserve GitHub's star/fork counts as raw observations. The connector does not calculate a star/fork delta itself; later signal logic can compare persisted observations without altering raw evidence.
+- GitHub Search has a separate quota from the core REST API. The client spaces topic-search calls by 2.1 seconds and reads the rate-limit headers from each response; if remaining quota drops below 10%, it stops issuing further requests in that run. It does not retry or back off in Phase 2.
+- The Remotive local watermark avoids re-emitting old feed items into the raw event store, but the public endpoint still returns the active feed. The size/truncation behavior has not been validated against a live application run.
+- The GitHub Actions workflow is not active while it exists only on the implementation branch, and no reachable hosted database secret is configured in this work. No cloud schedule run is claimed.
+
+## Commit record
+
+- `a55b2034130c336a1e1515129babd2652f61dade` — cursor-state schema and initial Phase 2 engineering log.
+- `91d61d53b17205ea742eef35d2830295d906b027` — common connector contract and HN adapter.
+- `bd94ef5145546da8921ecee54c600b2a274441fe` — GitHub client and connector.
+- `d072f4536ae2275b52a325feefb2fa9beb4372c1` — Remotive client and connector.
+- `c5512103b6a462b6a2f5cc575adec386675d8d88` — transactional ingestion runner, source seed migration, CLI and GitHub Actions workflow.

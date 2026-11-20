@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable
+import logging
 import uuid
 
 from sqlalchemy import select, update
@@ -20,6 +21,9 @@ from app.models.ingestion_run import IngestionRun
 from app.models.source import Source
 from app.models.source_event import SourceEvent
 from app.models.technology import Technology
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -201,7 +205,14 @@ async def run_source_ingestion(
     finally:
         close = getattr(connector, "aclose", None)
         if callable(close):
-            await close()
+            try:
+                await close()
+            except Exception:
+                # A cleanup failure must not hide a persisted run outcome or
+                # prevent later sources from being attempted.
+                logger.exception(
+                    "Failed to close connector for source %s", source_id
+                )
 
 
 async def run_connectors_independently(
