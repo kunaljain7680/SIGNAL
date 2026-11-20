@@ -83,3 +83,20 @@ No Phase 2 acceptance criterion is marked complete by this schema-only unit.
 - The existing Phase 1 pipeline is not changed by this adapter.
 - Database integration and event/cursor atomicity are not yet implemented or verified.
 - No migration has been applied.
+
+
+### 2026-11-21 — GitHub connector
+
+**Implemented in this unit:**
+- Added an authenticated GitHub REST client using a token supplied at runtime; no token is stored in source configuration or committed files.
+- Added per-topic repository search, repository snapshots and release retrieval.
+- Added repository and release ETag persistence in the in-memory cursor; HTTP 304 responses create no raw events.
+- Added per-topic `last_checked_at` state.
+- Added rate-limit header tracking and a stop-before-next-request guard when the advertised remaining quota is below 10%.
+- Limited each tracked topic to the ten most recently updated repository search results per run; this bounds API usage for the seeded catalogue.
+
+**Verification status:**
+- GitHub client and connector tests were added; they have not been run locally.
+- External GitHub API integration has not yet been tested.
+- The connector is not yet wired into the database-backed ingestion-run executor.
+- No Phase 2 acceptance criterion is marked complete by this unit alone.
