@@ -50,7 +50,7 @@ class IngestionRun(Base):
     __table_args__ = (
         CheckConstraint(
             "status IN ('PENDING', 'FETCHING', 'NORMALIZING', "
-            "'COMPLETED', 'RETRYING', 'DEAD_LETTER')",
+            "'COMPLETED', 'FAILED', 'RETRYING', 'DEAD_LETTER')",
             name="check_ingestion_run_status",
         ),
     )

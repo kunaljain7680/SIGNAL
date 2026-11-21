@@ -31,6 +31,11 @@ class Source(Base):
         nullable=False,
         server_default=text("'{}'::jsonb"),
     )
+    cursor_state: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
