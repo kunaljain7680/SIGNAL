@@ -1,0 +1,43 @@
+# SIGNAL — Implementation Decisions
+
+One line per approved implementation decision; the locked architecture remains signal-architecture.md.
+
+- Cursor storage: persist per-scope cursors in sources.cursor_state JSONB NOT NULL DEFAULT '{}'; keep sources.config for static source configuration.
+- Cursor merge: update one scope atomically with cursor_state = cursor_state || jsonb_build_object(scope_key, cursor); never replace the entire cursor map from an in-memory copy.
+- Scope transaction: fetch over HTTP first, then lock the source row with SELECT ... FOR UPDATE, insert events with ON CONFLICT DO NOTHING, merge that scope's cursor and commit in one transaction.
+- Source identity: keep the existing Hacker News row (type hn); add GitHub (type github) and Remotive (type jobs); do not create an hn_algolia database row.
+- Connector registry: use the key hn_algolia for the HN connector and map it to the existing Hacker News source row in one place; do not register the Firebase prototype.
+- Source schedules: merge schedule_interval_s into source config with HN = 21600, GitHub = 86400 and Remotive = 86400 seconds; do not overwrite other config keys.
+- HN compatibility: preserve Phase 1 query terms, native-ID format, raw event shape, normalization, hn_v0 scoring and snapshots unchanged.
+- HN first cursor: an empty technology-slug cursor backfills 42 days in seven-day slices; split any incomplete slice until all API-reported hits are retrieved.
+- HN subsequent cursor: persist the highest ingested created_at_i per technology slug and re-query with about a one-hour overlap; rely on database deduplication for overlap.
+- HN regression gate: before connector step 4, report Firebase-origin event counts and how existing rows distinguish Firebase from Algolia; do not delete or migrate historical events without approval.
+- GitHub scope inventory: draft a version-controlled scope file for all 28 technologies with 0–3 verified canonical repositories and 0–1 meaningful topic each, capped around 60 repositories and 28 topics; use 3–5 verified starter entries and fixtures until owner review.
+- GitHub authentication: use an owner-created fine-grained read-only PAT from local .env and later Actions secrets; never request, receive, log or commit its value.
+- GitHub requests: process repository scopes before topic scopes, serially; persist repository snapshots, release events and daily topic-count snapshots using the snapshot:, release: and topic: native-ID prefixes.
+- GitHub quota: read x-ratelimit-remaining on every response; stop the current run without sleeping when fewer than 100 remain or a rate-limit 403/429 occurs.
+- Remotive fetch: make one unfiltered category=software-dev feed request per eligible run; preserve the full raw feed and defer technology matching to Phase 3.
+- Remotive cursor: keep last_fetched_at, max_id_seen and max_publication_date_seen under the feed scope for observability only; deduplicate by Remotive ID and do not filter by publication date.
+- Remotive guard: refuse a live fetch within six hours of the last successful fetch; a guarded run creates no ingestion_runs row, changes no run/health timestamps, logs the reason and exits successfully; there is no force option.
+- Remotive display: show title, company, date, original listing link and Source: Remotive; do not republish descriptions.
+- Run ordering: apply the minimum-run-interval guard, create a PENDING run and set last_run_at, preflight required environment variables, fetch each scope, then finalize run status and source health.
+- Preflight failure: create a FAILED run with current_step=PREFLIGHT, record missing environment-variable names only, update source health, and make no provider request.
+- Phase 2 run state: use one attempt with PENDING -> FETCHING -> COMPLETED | FAILED; keep retry_count=0 and leave NORMALIZING unused.
+- Partial scope failure: a run is COMPLETED only when every scope succeeds; otherwise mark FAILED and list failed/unprocessed scopes in error_message, retaining cursors for scopes already committed.
+- Missing native IDs: skip, count, log and mention events without derivable native IDs in error_message; do not add a quarantine table.
+- Source health: zero consecutive FAILED runs = healthy, one = degraded, two or more = down; update health and last_run_at after an attempted run.
+- Scheduler due rule: a source is due when never run or when now - sources.last_run_at >= config.schedule_interval_s; failures wait a full interval rather than being retried every scheduler tick.
+- Scheduler isolation: the local asyncio scheduler wakes about every 60 seconds, processes sources sequentially, and continues after an unexpected run exception after recording FAILED.
+- Phase 7 boundary: do not implement retries/backoff, RETRYING, next-retry timestamps, DEAD_LETTER/DLQ recovery, ingestion_failures, stuck-run reaping or broader failure classification in Phase 2.
+- Scheduling deployment: use the local scheduler loop in development; add the GitHub Actions run_once workflow only in Phase 10, with no Render Cron Jobs or HTTP trigger endpoints.
+- Hosting: use Supabase Free PostgreSQL, Render Free FastAPI web service and Render Free static site; do not use Render Postgres, Render Cron Jobs or paid infrastructure.
+- Free-plan limits: plan for Supabase Free's 500 MB database and inactivity pause, and Render Free web-service sleep/cold starts and ephemeral filesystem; this is a portfolio/demo deployment, not an always-on SLA.
+- Supabase connectivity: use the shared session-mode pooler for IPv4-compatible hosted-runner connectivity and verify a real Actions-to-Supabase connection when the Phase 10 workflow is wired.
+- GitHub Actions schedule: scheduled workflows run from the default branch only; Phase 10 scheduling requires a later owner-approved workflow integration into main.
+- Supabase extensions: pg_trgm and vector are available; enable only when their architecture phase requires them, not as part of Phase 2.
+- HN regression test: re-running the connector over a Phase 1-ingested window must add zero source_events and leave every relevant hn_v0 snapshot score unchanged; stop and report any difference.
+- Remotive growth report: after the first two real Remotive runs, report average raw_payload size, new rows per day and projected growth against Supabase Free's 500 MB database limit; do not trim data without owner approval.
+- Acceptance runs: after owner review of the GitHub scope seed file, run each source twice with run_once and verify that the second run adds no duplicate source_events.
+- External API tests: all automated provider tests use recorded fixtures; automated tests never call live Remotive or other live provider APIs.
+- GitHub token scopes: use fine-grained read-only public-repository permissions only, with Metadata: read and Contents: read where required by the selected endpoints.
+- Repository hygiene: keep architecture amendments in signal-architecture.md only when explicitly approved; record implementation choices in this separate file.

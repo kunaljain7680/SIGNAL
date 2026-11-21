@@ -131,34 +131,75 @@ graph TD
 
 ### C.1 Connector abstraction
 
-```python
-class SourceConnector(Protocol):
-    source_id: str
+The connector contract is intentionally small. The runner owns the database source_id, scope transactions, run lifecycle and health calculation; connectors do not own persistence or run state.
 
-    async def fetch_since(self, cursor: Cursor) -> list[RawEvent]: ...
-    def health_check(self) -> SourceHealth: ...
-    def rate_limit_config(self) -> RateLimitConfig: ...
-    def auth_config(self) -> AuthConfig: ...
+```python
+Cursor = dict[str, Any]  # JSON-serializable cursor state for one scope
+
+@dataclass(frozen=True)
+class RawEvent:
+    source_native_id: str
+    raw_payload: dict[str, Any]
+
+@dataclass(frozen=True)
+class FetchResult:
+    events: list[RawEvent]
+    next_cursor: Cursor
+
+class SourceHealth(str, Enum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    DOWN = "down"
+    UNKNOWN = "unknown"
+
+@dataclass(frozen=True)
+class RateLimitConfig:
+    min_run_interval_s: int
+    min_request_interval_s: float
+
+@dataclass(frozen=True)
+class AuthConfig:
+    required_env: tuple[str, ...]
+
+class SourceConnector(Protocol):
+    name: str
+    rate_limit: RateLimitConfig
+    auth: AuthConfig
+
+    async def scopes(self) -> list[str]: ...
+    async def fetch_since(
+        self, scope_key: str, cursor: Cursor
+    ) -> FetchResult: ...
 ```
 
-Every connector implements this interface and nothing else needs to know its internals. Adding a fourth source later means writing one class, not touching the pipeline.
+cursor_state is a flat JSONB map keyed by scope: an HN technology slug, a GitHub repo:owner/name or topic:name, or Remotive feed. Cursor is a JSON-serializable dictionary. RawEvent contains only the provider-native ID and unmodified raw payload; the runner supplies the database source UUID. A FetchResult returns the events and the proposed next cursor for that scope. SourceHealth is computed by the runner from persisted run history; connectors do not implement health_check(). The runner enforces both run and request interval limits and verifies every name in AuthConfig.required_env before making provider requests. The connector registry is a plain dictionary keyed by connector name; it does not require base classes, plugins or middleware.
+
+The existing Hacker News Algolia client is wrapped by the HN connector. Its registry key is hn_algolia, mapped to the existing Hacker News source row (type hn); no separate hn_algolia source row is created. The Firebase prototype is not registered.
 
 ### C.2 The three initial sources
 
 | Source | What it gives | Cursor / incremental strategy | Rate limit | Auth |
 |---|---|---|---|---|
-| **GitHub Search/REST API** | Repo activity, stars/forks delta, releases matching tracked technology topics | Per-repo `ETag` for conditional GET (304 = no new data, costs nothing) + `last_checked_at` per tracked topic | 5,000 req/hr authenticated — tracked via response headers, backoff triggers at <10% remaining | Personal access token |
-| **HN Algolia Search API** | Discussion volume, points, comment counts for tracked keywords | `last search timestamp` per keyword, date-range query | Generous, unauthenticated, no key required | None |
-| **Remotive Jobs API** | Job postings mentioning tracked technologies (remote-only coverage — an honest, stated limitation, not hidden) | `since_id` / page cursor on each poll | Public, free, no key | None |
+| **GitHub Search/REST API** | Repository snapshots, releases and tracked-topic repository counts | Process curated repository scopes first: GET /repos/{owner}/{repo} with If-None-Match; a 200 response is stored as snapshot:{repo_id}:{YYYY-MM-DD}, while 304 creates no event and records the check time. Then process topic scopes using GET /search/repositories?q=topic:{name}&per_page=1; store total_count as topic:{name}:{YYYY-MM-DD}. Release records use release:{release_id} and conditional requests. An incomplete_results=true topic response fails that scope without cursor advancement. | Serial requests; at least 2 seconds between topic-search calls. Read x-ratelimit-remaining on every response. Stop the run without sleeping if remaining quota is below 100 or a rate-limit 403/429 is returned. | Fine-grained personal access token from an environment variable; read-only public-data access |
+| **HN Algolia Search API** | Discussion volume, points and comment counts for the existing Phase 1 technology queries | One scope per technology slug. On an empty cursor, backfill 42 days in 7-day slices. If a slice returns fewer hits than the API reports exist, split the slice and retry until complete; never silently truncate. Later runs resume from the highest ingested created_at_i with about a one-hour overlap. Preserve Phase 1 query terms, native IDs and raw event shape. | Generous, unauthenticated, no key required | None |
+| **Remotive Jobs API** | Complete active remote software-development job feed; remote-only coverage remains an explicit limitation | One category=software-dev full-feed request per run; no per-technology filtering, publication-date filtering or server-side cursor. Deduplicate by Remotive job ID. A six-hour minimum-run guard prevents another live fetch. The feed cursor stores last_fetched_at, max_id_seen and max_publication_date_seen for observability only. | Public API; one request per run and at least six hours between successful fetches | None |
+
+GitHub snapshot event payloads retain the repository object returned by the API; release events retain the provider release object; topic events retain the search result's reported total_count. GitHub scope keys are repo:{owner}/{repo} and topic:{name}. Only curated repository and topic scopes are fetched. No GitHub star-history endpoint is used; Phase 4 derives star/fork changes by comparing persisted repository snapshots.
+
+Remotive raw responses are preserved in full in Phase 2, without filtering to the currently tracked technology names. Technology matching belongs to Phase 3. If the response does not contain the expected jobs list, the scope fails and its cursor is not advanced. When job postings are displayed later, show only title, company, date and the original listing link, with Source: Remotive; do not republish descriptions.
 
 ### C.3 Per-source reliability handling
 
-- **Retry:** transient failures (5xx, timeout, 429) → exponential backoff (30s → 2m → 8m), 3 attempts, then → DLQ.
-- **Permanent failure:** 401/403 → no retry, alert immediately (this is a config problem, not a transient one).
-- **Malformed data:** individual events that fail schema validation are quarantined into `ingestion_failures` with the raw payload preserved — the *run* doesn't fail because one event is broken.
-- **Schema drift:** each connector's parser is a Pydantic model with a version tag; a validation failure that affects >X% of a batch triggers an alert (source likely changed its response shape) rather than silently dropping data.
-- **Source health:** `sources.health_status` updated after every run (`healthy` / `degraded` / `down`), surfaced in the UI so a stale technology's low confidence is explainable ("Jobs source hasn't reported in 6 days").
-- **No full re-ingestion, ever:** every fetch is cursor-based; a cold restart re-reads from the last successful cursor, not from the beginning.
+- **[Phase 7] Retry:** transient failures (5xx, timeout, 429) use exponential backoff (30s → 2m → 8m), 3 attempts, then move to the DLQ. Phase 2 performs one attempt only and does not implement retry behavior.
+- **[Phase 7] Permanent failure classification:** general provider 401/403 failures are classified as permanent and alert immediately rather than retrying.
+- **[Phase 2] Immediate failures:** missing authentication environment variables fail preflight; malformed Remotive response shape, incomplete GitHub topic-search results and a missing GitHub repository (404) fail their scope; GitHub rate-limit exhaustion (remaining quota below 100 or rate-limit 403/429) stops the run without sleeping.
+- **[Phase 7] Malformed data quarantine:** individual events that fail schema validation are quarantined into ingestion_failures with the raw payload preserved; the run does not fail because one event is broken.
+- **[Phase 2] Missing native IDs:** events without a derivable native ID are skipped, counted and logged, and noted in the run's error_message; Phase 2 does not create a quarantine table.
+- **[Phase 7] Schema drift:** connector parsers use versioned Pydantic models; a validation failure affecting more than the configured batch threshold triggers an alert rather than silently dropping data.
+- **[Phase 2] Source health:** the runner updates sources.health_status after every attempted run: zero consecutive FAILED runs means healthy, one means degraded, and two or more means down. It updates last_run_at when the run row is created, including preflight failures. A run blocked by the minimum-run-interval guard creates no run and does not change health or last_run_at.
+- **[Phase 2] Scope progress and isolation:** each scope is fetched before its database transaction; inside the transaction the runner locks the source row, inserts raw events with ON CONFLICT DO NOTHING, merges only that scope's cursor into cursor_state, and commits. A failed scope does not undo already committed scopes; unprocessed scopes are included in the failed run's error_message. A source failure does not prevent the scheduler from proceeding to the next source.
+- **[Phase 2] Run lifecycle:** one attempt follows PENDING → FETCHING → COMPLETED or FAILED; retry_count remains zero and NORMALIZING is unused. A run is COMPLETED only when all scopes succeed; otherwise it is FAILED and records failed and unprocessed scopes while retaining already committed cursors.
+- **[Phase 2] Incremental operation:** every source uses its persisted scope cursor and source-native deduplication. A cold restart resumes from committed scope cursors; it does not perform an unbounded full re-ingestion.
 
 ---
 
@@ -513,6 +554,7 @@ CREATE TABLE sources (
     name TEXT NOT NULL UNIQUE,
     type TEXT NOT NULL CHECK (type IN ('github','hn','jobs')),
     config JSONB NOT NULL DEFAULT '{}',
+    cursor_state JSONB NOT NULL DEFAULT '{}',
     is_active BOOLEAN DEFAULT TRUE,
     last_run_at TIMESTAMPTZ,
     health_status TEXT DEFAULT 'unknown'
@@ -554,7 +596,7 @@ CREATE TABLE evidence_clusters (
 CREATE TABLE ingestion_runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_id UUID NOT NULL REFERENCES sources(id),
-    status TEXT NOT NULL CHECK (status IN ('PENDING','FETCHING','NORMALIZING','COMPLETED','RETRYING','DEAD_LETTER')),
+    status TEXT NOT NULL CHECK (status IN ('PENDING','FETCHING','NORMALIZING','COMPLETED','FAILED','RETRYING','DEAD_LETTER')),
     current_step TEXT NOT NULL DEFAULT 'INIT',
     started_at TIMESTAMPTZ DEFAULT NOW(),
     completed_at TIMESTAMPTZ,
@@ -719,23 +761,27 @@ volumes:
   pgdata:
 ```
 
-- **Seed data:** a `seed.py` script inserts the ~25–30 curated technologies + aliases + relationships (matching the existing UI mockup's technology list) so the app is immediately demoable without waiting on live ingestion.
+- **Seed data:** a seed.py script inserts the ~25–30 curated technologies + aliases + relationships (matching the existing UI mockup's technology list) so the app is immediately demoable without waiting on live ingestion. Source seed scripts create the existing Hacker News row and the GitHub and Remotive rows, and merge schedule settings into sources.config; they never write cursor_state.
+- **Manual ingestion:** run one source through the same execution path used by the scheduler with python -m app.workers.run_once --source <name>. The registered source names are hn_algolia, github and remotive; hn_algolia maps to the existing Hacker News database row.
+- **Local scheduler:** python -m app.workers.scheduler_loop runs a lightweight asyncio loop that wakes about every 60 seconds and checks active sources sequentially. A source is due when last_run_at is null or now - last_run_at >= config.schedule_interval_s. last_run_at is set when an ingestion-run row is created, so successful runs and failed attempts both wait for the full configured interval. The same timestamp is used by the minimum-run-interval guard.
+- **No force or HTTP trigger:** the manual runner has no --force flag, and local or cloud ingestion is not initiated through an HTTP endpoint.
 - **Observability locally:** structured JSON logging to stdout is sufficient — no need to stand up a metrics stack locally.
-- Full pipeline reproducible with `docker compose up` + `python -m app.workers.run_once --source=hn` to trigger one ingestion manually.
-
----
+- Full pipeline reproducible with docker compose up and the per-source run_once command above. Local development may use the Compose PostgreSQL instance; the deployed database host is Supabase (§X).
 
 ## X. Cloud Deployment
 
 | Environment | Setup |
 |---|---|
-| **Development** | Local Docker Compose (§W) |
-| **Staging** | Render/Railway free-tier Postgres + one API instance, scheduled jobs run at reduced frequency |
-| **Production** | Render/Railway persistent web service (FastAPI) + Render Cron Jobs (or Railway's scheduled jobs) triggering the ingestion/recommendation endpoints on schedule; managed Postgres with `pgvector` enabled (Supabase or Render Postgres, both support the extension) |
+| **Development** | Local Docker Compose and the local sequential scheduler loop (§W). |
+| **Staging** | Render Free web service for the FastAPI API + Render Free static site + Supabase Free PostgreSQL. Run ingestion manually during Phase 2; do not add a hosted scheduler before Phase 10. |
+| **Portfolio deployment (Phase 10)** | Render Free web service for FastAPI + Render Free static site + Supabase Free PostgreSQL. A scheduled GitHub Actions workflow invokes python -m app.workers.run_once --source <name> using repository secrets. Render Cron Jobs and Render Postgres are not used. |
 
-- **Why not Vercel:** Vercel's serverless model fits Next.js/JS well (as OmniListen used it) but fights against a Python FastAPI service that needs longer-running background workers — a persistent-service host is the better fit here, not a downgrade in ambition.
-- **Secrets:** platform-native secret manager (Render/Railway env vars), never committed.
-- **Logs/metrics:** platform-native log aggregation to start; a lightweight `/metrics` endpoint (Prometheus format) can be added without new infrastructure if needed later.
+- **Free-plan constraints are deliberate:** Supabase Free currently includes a 500 MB database and can pause a project after one week of inactivity. Render Free web services spin down after 15 minutes without inbound traffic and typically take about a minute to wake; their local filesystem is ephemeral. Render static sites are free to deploy. This supports a portfolio/demo deployment, not an always-on production SLA.
+- **Database connectivity:** use the Supabase shared session-mode pooler for IPv4-compatible connections from GitHub-hosted runners; verify a real database connection when the Phase 10 workflow is wired. Do not assume the local Docker database is reachable from a hosted runner.
+- **Scheduled workflow placement:** GitHub Actions scheduled workflows run only when the workflow file exists on the repository's default branch and execute from that branch. Enabling the Phase 10 schedule therefore requires the owner-approved integration of the workflow into the default branch; main remains untouched until that approval.
+- **Why not Render Cron or Render Postgres:** the free Render plan does not support cron jobs, and free Render Postgres expires after 30 days. GitHub Actions is the scheduled runner in Phase 10, and Supabase is the persistent database host.
+- **Secrets:** source API tokens and database credentials live only in local environment variables during development and platform/repository-managed secrets when deployed; never commit them or store provider credentials in sources.config.
+- **Logs/metrics:** platform-native log aggregation to start; a lightweight /metrics endpoint (Prometheus format) can be added without new infrastructure if needed later.
 
 ---
 
@@ -796,7 +842,7 @@ This single sequence proves: source isolation, checkpointed resume, DLQ recovery
 | **7. Checkpointing + idempotency + retry/DLQ** | `recommendation_jobs` state machine, DLQ recovery endpoint | `recommendation_jobs`, `ingestion_failures` | Crash-resume test, DLQ test | The Killer Demo (§Z) works end to end | Reliability claims are real, not aspirational |
 | **8. AI enrichment** | LLM reasoning text with fallback provider, decoupled from scoring, cost tracking | `llm_usage` | LLM-failure-isolation test | Explanation text with provider fallback | LLM outage never corrupts the score |
 | **9. Feedback loop** | Telemetry capture, nightly affinity batch, `recommendation_history` "what changed" view | `telemetry_events`, `user_domain_affinity`, `recommendation_history` | Affinity recompute test | Recommendations visibly shift after user action | Personalization is real, not decorative |
-| **10. Production deployment** | Render/Railway deploy, cron config, secrets, basic observability dashboard | — | Load test | Live public URL, running on schedule | System survives outside a laptop |
+| **10. Production deployment** | Render FastAPI web service + static site, Supabase PostgreSQL, GitHub Actions scheduled workflow invoking run_once, secrets, basic observability dashboard | — | Load test | Live public URL, scheduled source ingestion | System survives outside a laptop |
 
 ---
 
