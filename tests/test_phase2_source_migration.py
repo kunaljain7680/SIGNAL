@@ -34,7 +34,10 @@ class TestPhase2SourceMigration(unittest.TestCase):
         self.assertIn("WHERE name = 'Hacker News' AND type = 'hn'", self.migration)
 
     def test_downgrade_reverses_changes(self) -> None:
-        self.assertIn('op.drop_column(\n        "sources",\n        "cursor_state",', self.migration)
+        self.assertRegex(
+            self.migration,
+            r'op\.drop_column\(\s*"sources",\s*"cursor_state",?\s*\)',
+        )
         self.assertIn("DELETE FROM sources", self.migration)
         self.assertIn("config = config - 'schedule_interval_s'", self.migration)
 
