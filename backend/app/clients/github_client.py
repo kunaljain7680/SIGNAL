@@ -54,12 +54,25 @@ class GitHubClient:
         except (TypeError, ValueError):
             pass
 
-        if response.status_code == 429 or (
-            response.status_code == 403 and remaining is not None and remaining < 100
-        ):
+        if response.status_code == 429:
             raise GitHubRateLimitError(
                 "GitHub rate limit response; stop without sleeping."
             )
+        if response.status_code == 403:
+            provider_message = ""
+            try:
+                error_payload = response.json()
+                if isinstance(error_payload, dict):
+                    provider_message = str(error_payload.get("message", ""))
+            except (ValueError, AttributeError):
+                pass
+            if (
+                (remaining is not None and remaining < 100)
+                or "rate limit" in provider_message.lower()
+            ):
+                raise GitHubRateLimitError(
+                    "GitHub rate limit response; stop without sleeping."
+                )
         if remaining is not None and remaining < 100:
             raise GitHubRateLimitError(
                 f"GitHub quota safety threshold reached ({remaining} remaining)."
