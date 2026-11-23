@@ -11,7 +11,7 @@ INVENTORY_PATH=Path(__file__).resolve().parents[1]/"scopes"/"github_scopes.json"
 class GitHubConnector:
     name="github"
     rate_limit=RateLimitConfig(min_run_interval_s=86400,min_request_interval_s=2.0)
-    auth=AuthConfig(required_env=("GITHUB_TOKEN",))
+    auth=AuthConfig(required_env=("SIGNAL_GITHUB_PAT",))
     def __init__(self,inventory_path:Path=INVENTORY_PATH,client_factory:Callable[[],GitHubClient]=GitHubClient,now_factory:Callable[[],datetime]|None=None):
         self.path=inventory_path;self.client_factory=client_factory;self.now=now_factory or (lambda:datetime.now(timezone.utc))
         self.repositories={};self.topics={}
