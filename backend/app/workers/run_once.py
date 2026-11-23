@@ -423,66 +423,85 @@ async def run_source_once(
     skipped_total = 0
     failure_message: str | None = None
     run_failed = False
+    preflight_failed = False
+
+    # Resolve and validate connector scopes before marking the run FETCHING.
+    # This makes configuration guards (such as an unapproved GitHub inventory)
+    # fail visibly at PREFLIGHT without beginning provider fetch work.
     try:
-        await _set_fetching(run_id, session_factory)
         scope_keys = await resolved_connector.scopes()
         if not isinstance(scope_keys, list):
             raise TypeError("Connector scopes() must return a list.")
+        if not scope_keys:
+            raise ValueError("Connector returned no scopes.")
         if any(not isinstance(key, str) or not key.strip() for key in scope_keys):
             raise ValueError("Connector scope keys must be non-empty strings.")
         if len(set(scope_keys)) != len(scope_keys):
             raise ValueError("Connector returned duplicate scope keys.")
-
-        for index, scope_key in enumerate(scope_keys):
-            try:
-                # Scope calls are sequential. Keep at least the configured
-                # interval between consecutive scope fetch operations.
-                if index and resolved_connector.rate_limit.min_request_interval_s > 0:
-                    await sleep_factory(
-                        resolved_connector.rate_limit.min_request_interval_s
-                    )
-
-                scope_cursor = context.cursor_state.get(scope_key, {})
-                if not isinstance(scope_cursor, dict):
-                    raise ValueError(
-                        f"Persisted cursor for scope {scope_key!r} must be a JSON object."
-                    )
-
-                fetch_result = await resolved_connector.fetch_since(
-                    scope_key,
-                    dict(scope_cursor),
-                )
-                valid_events, skipped_count = _validated_events(
-                    fetch_result,
-                    scope_key,
-                )
-                inserted_count = await _persist_scope(
-                    source_id=context.id,
-                    scope_key=scope_key,
-                    events=valid_events,
-                    next_cursor=fetch_result.next_cursor,
-                    session_factory=session_factory,
-                )
-                inserted_total += inserted_count
-                skipped_total += skipped_count
-            except Exception as exc:
-                remaining_scopes = scope_keys[index + 1 :]
-                details = [
-                    f"Scope {scope_key!r} failed ({type(exc).__name__}): {exc}"
-                ]
-                if remaining_scopes:
-                    details.append(
-                        "Unprocessed scopes: " + ", ".join(remaining_scopes)
-                    )
-                failure_message = " ".join(details)
-                run_failed = True
-                break
     except Exception as exc:
+        preflight_failed = True
         run_failed = True
         failure_message = (
-            f"Scope discovery or runner execution failed "
-            f"({type(exc).__name__}): {exc}"
+            f"Connector preflight failed ({type(exc).__name__}): {exc}"
         )
+
+    if not preflight_failed:
+        try:
+            await _set_fetching(run_id, session_factory)
+
+            for index, scope_key in enumerate(scope_keys):
+                try:
+                    # Scope calls are sequential. Keep at least the configured
+                    # interval between consecutive scope fetch operations.
+                    if (
+                        index
+                        and resolved_connector.rate_limit.min_request_interval_s > 0
+                    ):
+                        await sleep_factory(
+                            resolved_connector.rate_limit.min_request_interval_s
+                        )
+
+                    scope_cursor = context.cursor_state.get(scope_key, {})
+                    if not isinstance(scope_cursor, dict):
+                        raise ValueError(
+                            f"Persisted cursor for scope {scope_key!r} "
+                            "must be a JSON object."
+                        )
+
+                    fetch_result = await resolved_connector.fetch_since(
+                        scope_key,
+                        dict(scope_cursor),
+                    )
+                    valid_events, skipped_count = _validated_events(
+                        fetch_result,
+                        scope_key,
+                    )
+                    inserted_count = await _persist_scope(
+                        source_id=context.id,
+                        scope_key=scope_key,
+                        events=valid_events,
+                        next_cursor=fetch_result.next_cursor,
+                        session_factory=session_factory,
+                    )
+                    inserted_total += inserted_count
+                    skipped_total += skipped_count
+                except Exception as exc:
+                    remaining_scopes = scope_keys[index + 1 :]
+                    details = [
+                        f"Scope {scope_key!r} failed ({type(exc).__name__}): {exc}"
+                    ]
+                    if remaining_scopes:
+                        details.append(
+                            "Unprocessed scopes: " + ", ".join(remaining_scopes)
+                        )
+                    failure_message = " ".join(details)
+                    run_failed = True
+                    break
+        except Exception as exc:
+            run_failed = True
+            failure_message = (
+                f"Runner execution failed ({type(exc).__name__}): {exc}"
+            )
 
     if skipped_total:
         skipped_message = (
@@ -495,7 +514,10 @@ async def run_source_once(
         )
 
     final_status = "FAILED" if run_failed else "COMPLETED"
-    final_step = "FAILED" if final_status == "FAILED" else "COMPLETED"
+    if preflight_failed:
+        final_step = "PREFLIGHT"
+    else:
+        final_step = "FAILED" if final_status == "FAILED" else "COMPLETED"
     await _finalize_run(
         run_id=run_id,
         source_id=context.id,
