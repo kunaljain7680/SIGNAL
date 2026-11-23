@@ -21,7 +21,7 @@ class GitHubClient:
         http_client: httpx.AsyncClient | None = None,
         timeout: float = 20.0,
     ):
-        self.token = token if token is not None else os.getenv("GITHUB_TOKEN")
+        self.token = token if token is not None else os.getenv("SIGNAL_GITHUB_PAT")
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
@@ -70,7 +70,19 @@ class GitHubClient:
         if response.status_code >= 400:
             message = "GitHub API request failed"
             try:
-                message += f": {response.json().get('message', '')}"
+                payload = response.json()
+                provider_message = (
+                    payload.get("message", "")
+                    if isinstance(payload, dict)
+                    else ""
+                )
+                if self.token and isinstance(provider_message, str):
+                    provider_message = provider_message.replace(
+                        self.token,
+                        "[REDACTED]",
+                    )
+                if provider_message:
+                    message += f": {provider_message}"
             except (ValueError, AttributeError):
                 pass
             raise GitHubAPIError(f"{message} (HTTP {response.status_code})")
