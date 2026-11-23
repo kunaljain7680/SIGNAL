@@ -173,7 +173,13 @@ class _FakeSession:
         if isinstance(statement, PostgreSQLInsert):
             self.assert_event_insert(statement)
             inserted = 0
-            for values in statement._multi_values[0]:
+            for row in statement._multi_values[0]:
+                # SQLAlchemy's multi-VALUES dictionaries use Column objects
+                # as keys, not string column names.
+                values = {
+                    column.key: value
+                    for column, value in row.items()
+                }
                 key = (values["source_id"], values["source_native_id"])
                 if key not in self.store.events:
                     self.store.events[key] = values["raw_payload"]
