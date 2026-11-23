@@ -21,6 +21,12 @@ class Tests(unittest.IsolatedAsyncioTestCase):
  async def test_403_rate_limit(self):
   g=GitHubClient("t",H(R(403,{"X-RateLimit-Remaining":"0"},{})))
   with self.assertRaises(GitHubRateLimitError):await g.get("/x")
+ async def test_secondary_rate_limit_403_is_detected_with_quota_remaining(self):
+  response=R(403,{"X-RateLimit-Remaining":"400"},{"message":"You have exceeded a secondary rate limit."})
+  g=GitHubClient("t",H(response))
+  with self.assertRaises(GitHubRateLimitError):
+   await g.get("/x")
+
  async def test_429(self):
   g=GitHubClient("t",H(R(429,{},{})))
   with self.assertRaises(GitHubRateLimitError):await g.get("/x")
