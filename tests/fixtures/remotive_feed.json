@@ -1,0 +1,32 @@
+{
+  "0-legal-notice": "Remotive API Legal Notice",
+  "job-count": 2,
+  "jobs": [
+    {
+      "id": 481234,
+      "url": "https://remotive.com/remote-jobs/software-dev/backend-engineer-481234",
+      "title": "Backend Engineer",
+      "company_name": "Example Systems",
+      "category": "Software Development",
+      "job_type": "full_time",
+      "publication_date": "2026-11-23T10:30:00",
+      "candidate_required_location": "Worldwide",
+      "salary": "$80,000 - $110,000",
+      "description": "<p>Build reliable backend services.</p>",
+      "tags": ["Python", "PostgreSQL"]
+    },
+    {
+      "id": 481235,
+      "url": "https://remotive.com/remote-jobs/software-dev/platform-engineer-481235",
+      "title": "Platform Engineer",
+      "company_name": "Example Cloud",
+      "category": "Software Development",
+      "job_type": "contract",
+      "publication_date": "2026-11-24T08:15:00+00:00",
+      "candidate_required_location": "Europe",
+      "salary": "",
+      "description": "<p>Improve developer tooling.</p>",
+      "tags": ["Python", "Docker"]
+    }
+  ]
+}

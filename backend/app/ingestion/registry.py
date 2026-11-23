@@ -1,4 +1,5 @@
 from app.ingestion.connectors.hn_algolia import HNAlgoliaConnector
+from app.ingestion.connectors.remotive import RemotiveConnector
 from app.ingestion.contracts import SourceConnector
 
 
@@ -6,10 +7,12 @@ from app.ingestion.contracts import SourceConnector
 # Keep source identity mapping here so connector names never create new source rows.
 CONNECTORS: dict[str, SourceConnector] = {
     "hn_algolia": HNAlgoliaConnector(),
+    "remotive": RemotiveConnector(),
 }
 
 CONNECTOR_SOURCE_IDENTITY: dict[str, tuple[str, str]] = {
     "hn_algolia": ("Hacker News", "hn"),
+    "remotive": ("Remotive", "jobs"),
 }
 
 
