@@ -89,7 +89,54 @@ class Tests(unittest.IsolatedAsyncioTestCase):
  async def test_304_returns_no_events(self):
   c=FakeClient(lambda q:(304,{},None));g=self.make(c);await g.scopes()
   r=await g.fetch_since("repo:python/cpython",{"repository_etag":"r","releases_etag":"l"})
-  self.assertEqual(r.events,[]);self.assertEqual(len(c.calls),2)
+  self.assertEqual(r.events,[])
+  self.assertEqual(len(c.calls),2)
+  self.assertEqual([call["etag"] for call in c.calls],["r","l"])
+  self.assertEqual(r.next_cursor["repository_etag"],"r")
+  self.assertEqual(r.next_cursor["releases_etag"],"l")
+  self.assertEqual(r.next_cursor["last_checked_at"],NOW.isoformat())
+ async def test_approved_seed_inventory_resolves_five_repo_scopes_and_no_topics(self):
+  inventory_path=Path(__file__).resolve().parents[1]/"backend"/"app"/"ingestion"/"scopes"/"github_scopes.json"
+  data=json.loads(inventory_path.read_text(encoding="utf-8"))
+  data["approval_status"]="approved"
+  data["owner_review_required"]=False
+  client=FakeClient(lambda _:self.fail("Scope discovery must not make HTTP requests"))
+  g=self.make(client,data)
+  scopes=await g.scopes()
+  self.assertEqual(len(scopes),5)
+  self.assertTrue(all(scope.startswith("repo:") for scope in scopes))
+  self.assertEqual(
+   set(scopes),
+   {
+    "repo:python/cpython",
+    "repo:fastapi/fastapi",
+    "repo:django/django",
+    "repo:pallets/flask",
+    "repo:pytorch/pytorch",
+   },
+  )
+  self.assertEqual(client.calls,[])
+
+ async def test_empty_release_list_is_a_successful_repo_fetch(self):
+  def response(call):
+   if call["path"]=="/repos/python/cpython":
+    return 200,{"etag":"repo-etag"},{"id":12,"full_name":"python/cpython"}
+   return 200,{"etag":"release-etag"},[]
+  client=FakeClient(response)
+  g=self.make(client)
+  await g.scopes()
+  result=await g.fetch_since("repo:python/cpython",{})
+  self.assertEqual([event.source_native_id for event in result.events],["snapshot:12:2026-11-24"])
+  self.assertEqual(result.next_cursor["releases_etag"],"release-etag")
+
+ async def test_moved_repository_fails_scope_without_fetching_releases(self):
+  client=FakeClient(lambda _: (301,{},{"message":"repository moved"}))
+  g=self.make(client)
+  await g.scopes()
+  with self.assertRaisesRegex(Exception,"301"):
+   await g.fetch_since("repo:python/cpython",{})
+  self.assertEqual(len(client.calls),1)
+
  async def test_topic_result(self):
   c=FakeClient(lambda q:(200,{},{"total_count":8,"incomplete_results":False,"items":[]}))
   g=self.make(c,inv(topic="python"));await g.scopes();r=await g.fetch_since("topic:python",{})
