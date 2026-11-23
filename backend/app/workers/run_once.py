@@ -293,7 +293,7 @@ async def _persist_scope(
     return inserted_count
 
 
-def _health_from_recent_statuses(statuses: list[str]) -> str:
+def health_from_recent_statuses(statuses: list[str]) -> str:
     consecutive_failures = 0
     for status in statuses:
         if status != "FAILED":
@@ -341,7 +341,7 @@ async def _finalize_run(
                     .limit(2)
                 )
             )
-            source.health_status = _health_from_recent_statuses(recent_statuses)
+            source.health_status = health_from_recent_statuses(recent_statuses)
             return source.health_status
 
 
