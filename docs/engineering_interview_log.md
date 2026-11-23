@@ -50,6 +50,7 @@ This is a running record of engineering issues encountered while implementing SI
 | Remotive connector and full Phase 2 suite | 90 tests passed |
 | Ingestion runner focused suite | 10 tests passed |
 | Full Phase 2 suite after runner integration | 100 tests passed |
-| Scheduler implementation and 8 focused tests | Awaiting local verification |
+| Scheduler focused suite | 8 tests passed |
+| Full suite after scheduler integration | Awaiting local verification |
 
 *New issues, diagnostics, fixes, and local verification results will be appended as they occur.*
