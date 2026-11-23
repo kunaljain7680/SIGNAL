@@ -101,7 +101,7 @@ class Tests(unittest.IsolatedAsyncioTestCase):
   c=FakeClient(lambda q:(200,{},{"total_count":"bad"}));g=self.make(c,inv(topic="python"));await g.scopes()
   with self.assertRaisesRegex(ValueError,"total_count"):await g.fetch_since("topic:python",{})
  async def test_scope_caps(self):
-  d={"approval_status":"approved","technologies":[{"repositories":[],"topic":str(i)} for i in range(29)]}
+  d={"approval_status":"approved","owner_review_required":False,"technologies":[{"repositories":[],"topic":str(i)} for i in range(29)]}
   g=self.make(FakeClient(lambda _:None),d)
   with self.assertRaisesRegex(ValueError,"caps"):await g.scopes()
  async def test_unknown_scope(self):
