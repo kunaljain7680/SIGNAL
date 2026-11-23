@@ -13,6 +13,7 @@ One line per approved implementation decision; the locked architecture remains s
 - HN subsequent cursor: persist the highest ingested created_at_i per technology slug and re-query with about a one-hour overlap; rely on database deduplication for overlap.
 - HN regression gate: before connector step 4, report Firebase-origin event counts and how existing rows distinguish Firebase from Algolia; do not delete or migrate historical events without approval.
 - GitHub scope inventory: draft a version-controlled scope file for all 28 technologies with 0–3 verified canonical repositories and 0–1 meaningful topic each, capped around 60 repositories and 28 topics; use 3–5 verified starter entries and fixtures until owner review.
+- GitHub scope source of truth: `backend/app/ingestion/scopes/github_scopes.json` is the sole runtime repository/topic inventory; `sources.config` holds schedule settings only and must not duplicate scopes.
 - GitHub authentication: use an owner-created fine-grained read-only PAT from local .env and later Actions secrets; never request, receive, log or commit its value.
 - GitHub requests: process repository scopes before topic scopes, serially; persist repository snapshots, release events and daily topic-count snapshots using the snapshot:, release: and topic: native-ID prefixes.
 - GitHub quota: read x-ratelimit-remaining on every response; stop the current run without sleeping when fewer than 100 remain or a rate-limit 403/429 occurs.
