@@ -164,7 +164,7 @@ async def _record_scheduler_failure(
                     id=uuid.uuid4(),
                     source_id=source.id,
                     status="FAILED",
-                    current_step="SCHEDULER",
+                    current_step="FAILED",
                     started_at=started_at,
                     completed_at=completed_at,
                     error_message=error_message,
