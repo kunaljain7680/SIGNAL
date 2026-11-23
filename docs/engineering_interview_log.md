@@ -12,21 +12,17 @@ This is a running record of engineering issues encountered while implementing SI
 - **Verification:** The GitHub client and connector tests passed after the fix; the full local suite subsequently reached 71 passing tests. After adding Remotive, the user confirmed 90 tests passed locally.
 - **Engineering lesson:** HTTP header names are case-insensitive by specification. Adapters and test doubles should preserve that semantic rather than rely on one representation's key lookup behaviour.
 
-### SQLAlchemy mapped-table wrapper in the runner's fake database adapter
+### SQLAlchemy expression and INSERT representations in the runner's fake database adapter
 
-- **Symptom:** Five focused runner tests failed and one errored. Successful scope processing was reported as failed, so duplicate handling, partial-scope behaviour, request spacing and skipped-ID reporting also appeared broken. The simulated commit-failure test raised while finalizing the run instead of during scope persistence.
-- **Root cause:** The test fake identified an UPDATE with object identity: `statement.table is Source.__table__`. SQLAlchemy exposes the mapped UPDATE target as an `AnnotatedTable`, so the identity check was false. The fake raised an assertion during the scope transaction; because that transaction never reached its simulated commit, the configured commit counter reached its failure point later during run finalization.
-- **Fix:** Match the UPDATE target by its stable table name: `statement.table.name == Source.__tablename__`.
-- **Verification:** Fix committed as `5320e4b`; awaiting the user's focused local rerun. Do not count this as resolved until the tests pass.
-- **Engineering lesson:** ORM-generated SQL expressions may wrap mapped tables. Test adapters should match stable SQL metadata (such as table name) instead of relying on Python object identity.
-
-### SQLAlchemy UPDATE parameter names in the fake cursor persistence test
-
-- **Symptom:** After fixing the fake adapter's mapped-table identity check, scope persistence still failed. The fake test code attempted to read hard-coded compiled parameter names and misidentified the cursor value.
-- **Root cause:** SQLAlchemy generates bind parameter names based on the expression tree; those names are not a stable contract for the test adapter.
-- **Fix:** The fake now identifies bound values by type: the scope key is a non-UUID string, and the cursor is the dictionary value. This avoids depending on generated parameter names.
-- **Verification:** Committed as `45cd714`; awaiting local focused tests.
-- **Engineering lesson:** Avoid coupling tests to incidental SQLAlchemy bind names. Assert on semantic values instead.
+- **Observed symptom:** The runner's first focused test run failed across several persistence scenarios. A diagnostic run later exposed the concrete scope error: `KeyError: 'source_id'` inside the fake adapter's event INSERT handling. The other failures were downstream because the first scope never completed.
+- **First mismatch found:** The fake adapter compared `statement.table` to `Source.__table__` by object identity. SQLAlchemy wraps mapped UPDATE targets in an `AnnotatedTable`, so identity comparison was unreliable.
+- **Correction:** Match the UPDATE target using `statement.table.name == Source.__tablename__`. This was committed as `5320e4b`.
+- **Second mismatch found:** The fake UPDATE handler relied on SQLAlchemy-generated bind parameter names. Those names are implementation details, not a stable test contract.
+- **Correction:** Extract the scope key and cursor from the compiled parameter values by their semantic types, rather than hard-coded generated names. This was committed as `45cd714`.
+- **Confirmed INSERT root cause:** A diagnostic inspection of `statement._multi_values` showed that each row is a dictionary keyed by SQLAlchemy `Column` objects, not strings. The fake adapter attempted `values["source_id"]`, which raised the observed `KeyError`.
+- **Correction:** Normalize each INSERT row to string keys using `column.key` before applying the fake in-memory uniqueness and row-count behaviour. Committed as `51bc102`.
+- **Verification:** The focused local runner suite has **not yet passed** after these test-adapter corrections. Keep this issue open until the user reruns all 10 focused tests successfully; only then run the full suite.
+- **Engineering lesson:** SQLAlchemy expression objects and compiled statements have structured representations. A test double should inspect stable semantic metadata, not assume plain-string mapping keys, object identity, or generated bind-parameter names.
 
 ## Open design / observability questions
 
