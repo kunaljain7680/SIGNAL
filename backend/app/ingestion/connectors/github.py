@@ -18,8 +18,16 @@ class GitHubConnector:
     def _inventory(self):
         try: data=json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError,json.JSONDecodeError) as e: raise RuntimeError(f"Cannot load GitHub scope inventory: {e}") from e
-        if not isinstance(data,dict) or data.get("approval_status")!="approved":
-            raise RuntimeError("GitHub scope inventory is still a draft; owner review is required before live fetching.")
+        if (
+            not isinstance(data, dict)
+            or data.get("approval_status") != "approved"
+            or data.get("owner_review_required") is not False
+        ):
+            raise RuntimeError(
+                "GitHub scope inventory is not owner-approved; "
+                "set approval_status='approved' and owner_review_required=false "
+                "in the owner's review commit before live fetching."
+            )
         techs=data.get("technologies")
         if not isinstance(techs,list): raise ValueError("GitHub technologies must be a list.")
         repos={};topics={}
