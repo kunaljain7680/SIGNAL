@@ -12,7 +12,7 @@ class FakeClient:
   c={"path":path,"params":params,"etag":etag};self.calls.append(c);return self.fn(c)
  async def aclose(self):self.closed=True
 def inv(status="approved",topic=None):
- return {"approval_status":status,"technologies":[{"repositories":[{"owner":"python","name":"cpython"}],"topic":topic}]}
+ return {"approval_status":status,"owner_review_required":status != "approved","technologies":[{"repositories":[{"owner":"python","name":"cpython"}],"topic":topic}]}
 class Tests(unittest.IsolatedAsyncioTestCase):
  def setUp(self):self.tmp=tempfile.TemporaryDirectory();self.p=Path(self.tmp.name)/"inv.json"
  def tearDown(self):self.tmp.cleanup()
@@ -64,6 +64,14 @@ class Tests(unittest.IsolatedAsyncioTestCase):
 
  async def test_connector_requires_dedicated_pat_variable(self):
   self.assertEqual(GitHubConnector.auth.required_env,("SIGNAL_GITHUB_PAT",))
+
+ async def test_approved_inventory_still_fails_while_owner_review_required(self):
+  d=inv("approved");d["owner_review_required"]=True
+  c=FakeClient(lambda _:self.fail("HTTP must not be used for an unapproved inventory"))
+  g=self.make(c,d)
+  with self.assertRaisesRegex(RuntimeError,"owner-approved"):
+   await g.scopes()
+  self.assertEqual(c.calls,[])
 
  async def test_repositories_before_topics(self):
   d=inv(topic="python");d["technologies"].append({"repositories":[{"owner":"fastapi","name":"fastapi"}],"topic":"fastapi"})
