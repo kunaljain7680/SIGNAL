@@ -2,6 +2,8 @@ import json,tempfile,unittest
 from datetime import datetime,timezone
 from pathlib import Path
 from app.ingestion.connectors.github import GitHubConnector
+from app.workers.run_once import run_source_once
+from tests.test_ingestion_runner import _FakeStore
 
 NOW=datetime(2026,11,24,12,tzinfo=timezone.utc)
 class FakeClient:
@@ -21,6 +23,48 @@ class Tests(unittest.IsolatedAsyncioTestCase):
   c=FakeClient(lambda _:None);g=self.make(c,inv("draft"))
   with self.assertRaisesRegex(RuntimeError,"draft"):await g.scopes()
   self.assertFalse(c.calls)
+ async def test_draft_inventory_fails_runner_preflight_without_http(self):
+  c=FakeClient(lambda _:self.fail("HTTP client should not be used for a draft inventory"))
+  g=self.make(c,inv("draft"))
+  store=_FakeStore(source_name="GitHub",source_type="github")
+  outcome=await run_source_once(
+   "github",
+   session_factory=store.factory,
+   env={"SIGNAL_GITHUB_PAT":"test-only-placeholder"},
+   now_factory=lambda:NOW,
+   connector=g,
+   source_identity=("GitHub","github"),
+  )
+  self.assertEqual(outcome.status,"FAILED")
+  self.assertIn("draft",outcome.error_message)
+  run=store.runs[outcome.run_id]
+  self.assertEqual(run.current_step,"PREFLIGHT")
+  self.assertEqual(run.status,"FAILED")
+  self.assertEqual(c.calls,[])
+  self.assertEqual(store.events,{})
+  self.assertEqual(store.source.cursor_state,{})
+
+ async def test_missing_custom_pat_fails_preflight_before_inventory_or_http(self):
+  c=FakeClient(lambda _:self.fail("HTTP client should not be used without a PAT"))
+  g=self.make(c,inv("draft"))
+  store=_FakeStore(source_name="GitHub",source_type="github")
+  outcome=await run_source_once(
+   "github",
+   session_factory=store.factory,
+   env={"GITHUB_TOKEN":"legacy-token-must-not-be-used"},
+   now_factory=lambda:NOW,
+   connector=g,
+   source_identity=("GitHub","github"),
+  )
+  self.assertEqual(outcome.status,"FAILED")
+  self.assertIn("SIGNAL_GITHUB_PAT",outcome.error_message)
+  self.assertNotIn("legacy-token-must-not-be-used",outcome.error_message)
+  self.assertEqual(store.runs[outcome.run_id].current_step,"PREFLIGHT")
+  self.assertEqual(c.calls,[])
+
+ async def test_connector_requires_dedicated_pat_variable(self):
+  self.assertEqual(GitHubConnector.auth.required_env,("SIGNAL_GITHUB_PAT",))
+
  async def test_repositories_before_topics(self):
   d=inv(topic="python");d["technologies"].append({"repositories":[{"owner":"fastapi","name":"fastapi"}],"topic":"fastapi"})
   g=self.make(FakeClient(lambda _:None),d)
