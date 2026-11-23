@@ -24,6 +24,14 @@ This is a running record of engineering issues encountered while implementing SI
 - **Verification:** The focused local runner suite has **not yet passed** after these test-adapter corrections. Keep this issue open until the user reruns all 10 focused tests successfully; only then run the full suite.
 - **Engineering lesson:** SQLAlchemy expression objects and compiled statements have structured representations. A test double should inspect stable semantic metadata, not assume plain-string mapping keys, object identity, or generated bind-parameter names.
 
+### Fake-session query recorder omitted scalar SELECT statements
+
+- **Symptom:** After the persistence-path tests passed, the remaining focused test failed because it expected two `SELECT ... FOR UPDATE` statements but found zero in the fake store's recorded statement list.
+- **Root cause:** The fake session appended statements in `execute()`, but the runner issues the source-row locking query through `session.scalar()`. That method executed the fake lookup without recording the statement, so the assertion inspected an incomplete query history.
+- **Fix:** Record the statement at the start of the fake `scalar()` method. The production runner's `with_for_update()` query is unchanged.
+- **Verification:** Patch committed as `e790760`; awaiting the user's focused local rerun. Do not treat the row-lock assertion as verified until all 10 focused runner tests pass.
+- **Engineering lesson:** When a test double records database activity, every supported execution path (`execute`, `scalar`, `scalars`, etc.) must be represented consistently; otherwise tests can report missing behaviour that actually occurred.
+
 ## Open design / observability questions
 
 ### Remotive skipped-job count is not exposed to the runner
