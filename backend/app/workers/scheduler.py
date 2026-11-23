@@ -173,7 +173,7 @@ async def _record_scheduler_failure(
                 session.add(failed_run)
             else:
                 in_progress.status = "FAILED"
-                in_progress.current_step = "SCHEDULER"
+                in_progress.current_step = "FAILED"
                 in_progress.completed_at = completed_at
                 in_progress.error_message = error_message
                 in_progress.retry_count = 0
