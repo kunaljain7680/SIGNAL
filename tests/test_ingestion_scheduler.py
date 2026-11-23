@@ -218,7 +218,7 @@ class IngestionSchedulerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(store.runs), 1)
         run = store.runs[0]
         self.assertEqual(run.status, "FAILED")
-        self.assertEqual(run.current_step, "SCHEDULER")
+        self.assertEqual(run.current_step, "FAILED")
         self.assertIn("unexpected failure", run.error_message)
         self.assertEqual(source.last_run_at, NOW)
         self.assertEqual(source.health_status, "degraded")
@@ -246,7 +246,7 @@ class IngestionSchedulerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(store.runs), 1)
         self.assertEqual(pending_run.status, "FAILED")
-        self.assertEqual(pending_run.current_step, "SCHEDULER")
+        self.assertEqual(pending_run.current_step, "FAILED")
         self.assertEqual(pending_run.completed_at, NOW)
         self.assertEqual(source.health_status, "degraded")
 
