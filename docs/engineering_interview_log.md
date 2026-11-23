@@ -21,7 +21,7 @@ This is a running record of engineering issues encountered while implementing SI
 - **Correction:** Extract the scope key and cursor from the compiled parameter values by their semantic types, rather than hard-coded generated names. This was committed as `45cd714`.
 - **Confirmed INSERT root cause:** A diagnostic inspection of `statement._multi_values` showed that each row is a dictionary keyed by SQLAlchemy `Column` objects, not strings. The fake adapter attempted `values["source_id"]`, which raised the observed `KeyError`.
 - **Correction:** Normalize each INSERT row to string keys using `column.key` before applying the fake in-memory uniqueness and row-count behaviour. Committed as `51bc102`.
-- **Verification:** The focused local runner suite has **not yet passed** after these test-adapter corrections. Keep this issue open until the user reruns all 10 focused tests successfully; only then run the full suite.
+- **Verification:** Resolved locally: the user confirmed all 10 focused runner tests passed, followed by 100 tests passing in the full suite after runner integration.
 - **Engineering lesson:** SQLAlchemy expression objects and compiled statements have structured representations. A test double should inspect stable semantic metadata, not assume plain-string mapping keys, object identity, or generated bind-parameter names.
 
 ### Fake-session query recorder omitted scalar SELECT statements
@@ -29,7 +29,7 @@ This is a running record of engineering issues encountered while implementing SI
 - **Symptom:** After the persistence-path tests passed, the remaining focused test failed because it expected two `SELECT ... FOR UPDATE` statements but found zero in the fake store's recorded statement list.
 - **Root cause:** The fake session appended statements in `execute()`, but the runner issues the source-row locking query through `session.scalar()`. That method executed the fake lookup without recording the statement, so the assertion inspected an incomplete query history.
 - **Fix:** Record the statement at the start of the fake `scalar()` method. The production runner's `with_for_update()` query is unchanged.
-- **Verification:** The user confirmed all 10 focused runner tests pass locally after pulling commit `e790760`. The full test suite is the next verification step; the runner is not considered fully verified until that suite passes.
+- **Verification:** The user confirmed 10/10 focused runner tests passed and then reported 100/100 tests passing in the full suite after runner integration.
 - **Engineering lesson:** When a test double records database activity, every supported execution path (`execute`, `scalar`, `scalars`, etc.) must be represented consistently; otherwise tests can report missing behaviour that actually occurred.
 
 ## Open design / observability questions
@@ -50,5 +50,6 @@ This is a running record of engineering issues encountered while implementing SI
 | Remotive connector and full Phase 2 suite | 90 tests passed |
 | Ingestion runner focused suite | 10 tests passed |
 | Full Phase 2 suite after runner integration | 100 tests passed |
+| Scheduler implementation and 8 focused tests | Awaiting local verification |
 
 *New issues, diagnostics, fixes, and local verification results will be appended as they occur.*
