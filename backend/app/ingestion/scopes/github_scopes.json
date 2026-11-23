@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "approval_status": "draft",
+  "owner_review_required": true,
+  "limits": {
+    "max_repositories": 60,
+    "max_topics": 28
+  },
+  "verification_note": "The five starter repositories were checked against GitHub repository metadata on 2026-11-24. Topic scopes are intentionally left empty until meaningful topics are owner-reviewed.",
+  "technologies": [
+    {
+      "technology_slug": "python",
+      "technology_name": "Python",
+      "repositories": [
+        {
+          "owner": "python",
+          "name": "cpython",
+          "verified": true,
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "topic": null
+    },
+    {
+      "technology_slug": "fastapi",
+      "technology_name": "FastAPI",
+      "repositories": [
+        {
+          "owner": "fastapi",
+          "name": "fastapi",
+          "verified": true,
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "topic": null
+    },
+    {
+      "technology_slug": "django",
+      "technology_name": "Django",
+      "repositories": [
+        {
+          "owner": "django",
+          "name": "django",
+          "verified": true,
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "topic": null
+    },
+    {
+      "technology_slug": "flask",
+      "technology_name": "Flask",
+      "repositories": [
+        {
+          "owner": "pallets",
+          "name": "flask",
+          "verified": true,
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "topic": null
+    },
+    {
+      "technology_slug": "node-js",
+      "technology_name": "Node.js",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "go",
+      "technology_name": "Go",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "rust",
+      "technology_name": "Rust",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "java",
+      "technology_name": "Java",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "spring-boot",
+      "technology_name": "Spring Boot",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "postgresql",
+      "technology_name": "PostgreSQL",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "redis",
+      "technology_name": "Redis",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "mongodb",
+      "technology_name": "MongoDB",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "elasticsearch",
+      "technology_name": "Elasticsearch",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "docker",
+      "technology_name": "Docker",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "kubernetes",
+      "technology_name": "Kubernetes",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "azure",
+      "technology_name": "Azure",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "aws",
+      "technology_name": "AWS",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "terraform",
+      "technology_name": "Terraform",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "pytorch",
+      "technology_name": "PyTorch",
+      "repositories": [
+        {
+          "owner": "pytorch",
+          "name": "pytorch",
+          "verified": true,
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "topic": null
+    },
+    {
+      "technology_slug": "hugging-face",
+      "technology_name": "Hugging Face",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "langchain",
+      "technology_name": "LangChain",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "langgraph",
+      "technology_name": "LangGraph",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "vllm",
+      "technology_name": "vLLM",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "mcp",
+      "technology_name": "MCP",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "apache-kafka",
+      "technology_name": "Apache Kafka",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "rabbitmq",
+      "technology_name": "RabbitMQ",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "react",
+      "technology_name": "React",
+      "repositories": [],
+      "topic": null
+    },
+    {
+      "technology_slug": "typescript",
+      "technology_name": "TypeScript",
+      "repositories": [],
+      "topic": null
+    }
+  ]
+}
