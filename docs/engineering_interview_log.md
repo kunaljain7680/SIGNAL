@@ -32,6 +32,16 @@ This is a running record of engineering issues encountered while implementing SI
 - **Verification:** The user confirmed 10/10 focused runner tests passed and then reported 100/100 tests passing in the full suite after runner integration.
 - **Engineering lesson:** When a test double records database activity, every supported execution path (`execute`, `scalar`, `scalars`, etc.) must be represented consistently; otherwise tests can report missing behaviour that actually occurred.
 
+### GitHub activation preflight and credential configuration review
+
+- **Observed during review:** The GitHub connector correctly refused a draft inventory in `scopes()`, but the runner called `_set_fetching()` before scope discovery. A draft inventory therefore ended as `FAILED` at step `FAILED`, rather than failing at `PREFLIGHT`.
+- **Root cause:** Scope inventory validation was positioned after the runner's state transition to `FETCHING`, even though it is local configuration validation and makes no provider request.
+- **Correction:** Resolve and validate connector scopes before `FETCHING`; discovery errors now finalize as `FAILED` at `PREFLIGHT`. An empty scope list also fails preflight instead of reporting a healthy empty completion.
+- **Credential correction:** The GitHub connector and client now use `SIGNAL_GITHUB_PAT` for the user-managed fine-grained PAT. Provider error messages redact the configured token. The example environment file documents the variable without including a value.
+- **Scope configuration:** `DECISIONS.md` now explicitly names `github_scopes.json` as the only repository/topic inventory; `sources.config` remains for schedule settings.
+- **Verification:** Code and fixture tests are committed; local focused and full-suite verification is pending. The GitHub inventory remains `draft`, and GitHub remains unregistered.
+- **Engineering lesson:** Configuration validation should fail before entering the fetching state, and credentials should use application-specific environment names with explicit redaction at error boundaries.
+
 ## Open design / observability questions
 
 ### Remotive skipped-job count is not exposed to the runner
