@@ -369,6 +369,41 @@ class IngestionRunnerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.store.source.last_run_at, NOW)
         self.assertEqual(self.store.source.health_status, "degraded")
 
+    async def test_scope_discovery_failure_is_recorded_at_preflight(self):
+        connector = _FakeConnector(
+            {"scope-a": FetchResult([], {"watermark": 1})}
+        )
+
+        async def fail_scope_discovery():
+            raise RuntimeError("GitHub inventory is still a draft")
+
+        connector.scopes = fail_scope_discovery
+        outcome = await self.run_fake(connector)
+
+        self.assertEqual(outcome.status, "FAILED")
+        self.assertIn("preflight", outcome.error_message.lower())
+        self.assertIn("still a draft", outcome.error_message)
+        self.assertEqual(connector.fetch_calls, [])
+        self.assertEqual(self.store.events, {})
+        self.assertEqual(self.store.source.cursor_state, {})
+        run = self.store.runs[outcome.run_id]
+        self.assertEqual(run.current_step, "PREFLIGHT")
+        self.assertEqual(run.status, "FAILED")
+
+    async def test_empty_scope_list_cannot_create_a_healthy_empty_run(self):
+        connector = _FakeConnector({}, scopes=[])
+
+        outcome = await self.run_fake(connector)
+
+        self.assertEqual(outcome.status, "FAILED")
+        self.assertIn("no scopes", outcome.error_message)
+        self.assertEqual(self.store.events, {})
+        self.assertEqual(self.store.source.cursor_state, {})
+        self.assertEqual(
+            self.store.runs[outcome.run_id].current_step,
+            "PREFLIGHT",
+        )
+
     async def test_remotive_guard_uses_last_successful_fetch_and_creates_no_run(self):
         last_fetch = NOW - timedelta(hours=2)
         self.store = _FakeStore(
