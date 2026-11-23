@@ -2,6 +2,7 @@ import json,tempfile,unittest
 from unittest.mock import patch
 from datetime import datetime,timezone
 from pathlib import Path
+from app.clients.github_client import GitHubAPIError
 from app.ingestion.connectors.github import GitHubConnector
 from app.workers.run_once import run_source_once
 from tests.test_ingestion_runner import _FakeStore
@@ -133,7 +134,7 @@ class Tests(unittest.IsolatedAsyncioTestCase):
   client=FakeClient(lambda _: (301,{},{"message":"repository moved"}))
   g=self.make(client)
   await g.scopes()
-  with self.assertRaisesRegex(Exception,"301"):
+  with self.assertRaisesRegex(GitHubAPIError,"301"):
    await g.fetch_since("repo:python/cpython",{})
   self.assertEqual(len(client.calls),1)
 
