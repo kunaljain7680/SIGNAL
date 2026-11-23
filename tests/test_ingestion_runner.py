@@ -142,6 +142,7 @@ class _FakeSession:
         return _FakeTransaction(self)
 
     async def scalar(self, statement):
+        self.store.statements.append(statement)
         entity = statement.column_descriptions[0].get("entity")
         if entity is Source:
             return self.store.source
