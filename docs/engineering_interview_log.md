@@ -48,5 +48,7 @@ This is a running record of engineering issues encountered while implementing SI
 |---|---:|
 | GitHub client/connector and earlier Phase 2 suite | 71 tests passed |
 | Remotive connector and full Phase 2 suite | 90 tests passed |
+| Ingestion runner focused suite | 10 tests passed |
+| Full Phase 2 suite after runner integration | 100 tests passed |
 
 *New issues, diagnostics, fixes, and local verification results will be appended as they occur.*
