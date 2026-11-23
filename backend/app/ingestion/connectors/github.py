@@ -24,7 +24,7 @@ class GitHubConnector:
             or data.get("owner_review_required") is not False
         ):
             raise RuntimeError(
-                "GitHub scope inventory is not owner-approved; "
+                "GitHub scope inventory is still a draft or not owner-approved; "
                 "set approval_status='approved' and owner_review_required=false "
                 "in the owner's review commit before live fetching."
             )
