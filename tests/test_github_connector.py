@@ -1,4 +1,5 @@
 import json,tempfile,unittest
+from unittest.mock import patch
 from datetime import datetime,timezone
 from pathlib import Path
 from app.ingestion.connectors.github import GitHubConnector
@@ -27,14 +28,15 @@ class Tests(unittest.IsolatedAsyncioTestCase):
   c=FakeClient(lambda _:self.fail("HTTP client should not be used for a draft inventory"))
   g=self.make(c,inv("draft"))
   store=_FakeStore(source_name="GitHub",source_type="github")
-  outcome=await run_source_once(
-   "github",
-   session_factory=store.factory,
-   env={"SIGNAL_GITHUB_PAT":"test-only-placeholder"},
-   now_factory=lambda:NOW,
-   connector=g,
-   source_identity=("GitHub","github"),
-  )
+  with patch("app.workers.run_once.settings.SIGNAL_GITHUB_PAT","test-only-placeholder"):
+   outcome=await run_source_once(
+    "github",
+    session_factory=store.factory,
+    env=None,
+    now_factory=lambda:NOW,
+    connector=g,
+    source_identity=("GitHub","github"),
+   )
   self.assertEqual(outcome.status,"FAILED")
   self.assertIn("draft",outcome.error_message)
   run=store.runs[outcome.run_id]
