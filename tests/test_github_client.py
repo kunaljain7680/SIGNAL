@@ -1,4 +1,3 @@
-import os
 import unittest
 from unittest.mock import AsyncMock,Mock,patch
 from app.clients.github_client import GitHubClient,GitHubAPIError,GitHubRateLimitError
@@ -31,9 +30,9 @@ class Tests(unittest.IsolatedAsyncioTestCase):
  async def test_bad_json(self):
   g=GitHubClient("t",H(R(200,{},ValueError())))
   with self.assertRaisesRegex(GitHubAPIError,"invalid JSON"):await g.get("/x")
- async def test_pat_is_read_from_dedicated_environment_variable(self):
+ async def test_pat_is_read_from_shared_application_settings(self):
   token="test-pat-value"
-  with patch.dict(os.environ,{"SIGNAL_GITHUB_PAT":token,"GITHUB_TOKEN":"wrong-token"}):
+  with patch("app.clients.github_client.settings.SIGNAL_GITHUB_PAT",token):
    with patch("app.clients.github_client.httpx.AsyncClient") as factory:
     GitHubClient()
   headers=factory.call_args.kwargs["headers"]
@@ -46,6 +45,12 @@ class Tests(unittest.IsolatedAsyncioTestCase):
    await g.get("/x")
   self.assertNotIn(token,str(raised.exception))
   self.assertIn("[REDACTED]",str(raised.exception))
+
+ async def test_settings_load_repository_root_env_file(self):
+  from pathlib import Path
+  from app.core.config import PROJECT_ROOT,Settings
+  self.assertEqual(PROJECT_ROOT,Path(__file__).resolve().parents[1])
+  self.assertEqual(Settings.model_config["env_file"],PROJECT_ROOT/".env")
 
  async def test_injected_client_not_closed(self):
   h=H(R(200,{},{}));g=GitHubClient("t",h);await g.aclose();h.aclose.assert_not_awaited()
