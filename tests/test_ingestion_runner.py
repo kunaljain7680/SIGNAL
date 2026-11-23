@@ -172,7 +172,7 @@ class _FakeSession:
                     inserted += 1
             return _FakeResult(inserted)
 
-        if isinstance(statement, Update) and statement.table is Source.__table__:
+        if isinstance(statement, Update) and statement.table.name == Source.__tablename__:
             compiled = statement.compile(dialect=postgresql.dialect())
             scope_key = compiled.params["jsonb_build_object_1"]
             next_cursor = compiled.params["param_1"]
