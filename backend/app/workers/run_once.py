@@ -17,6 +17,7 @@ from sqlalchemy import func, literal, select, update
 from sqlalchemy.dialects.postgresql import JSONB, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.ingestion.contracts import FetchResult, RawEvent, SourceConnector
 from app.ingestion.registry import CONNECTORS, CONNECTOR_SOURCE_IDENTITY, get_connector
@@ -390,7 +391,12 @@ async def run_source_once(
         session_factory=session_factory,
     )
 
-    environment = os.environ if env is None else env
+    if env is None:
+        environment = dict(os.environ)
+        if settings.SIGNAL_GITHUB_PAT:
+            environment.setdefault("SIGNAL_GITHUB_PAT", settings.SIGNAL_GITHUB_PAT)
+    else:
+        environment = env
     missing_environment = sorted(
         name
         for name in resolved_connector.auth.required_env
