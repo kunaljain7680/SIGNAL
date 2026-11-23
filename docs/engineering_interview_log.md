@@ -51,6 +51,6 @@ This is a running record of engineering issues encountered while implementing SI
 | Ingestion runner focused suite | 10 tests passed |
 | Full Phase 2 suite after runner integration | 100 tests passed |
 | Scheduler focused suite | 8 tests passed |
-| Full suite after scheduler integration | Awaiting local verification |
+| Full suite after scheduler integration | 108 tests passed |
 
 *New issues, diagnostics, fixes, and local verification results will be appended as they occur.*
