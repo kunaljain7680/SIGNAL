@@ -20,6 +20,14 @@ This is a running record of engineering issues encountered while implementing SI
 - **Verification:** Fix committed as `5320e4b`; awaiting the user's focused local rerun. Do not count this as resolved until the tests pass.
 - **Engineering lesson:** ORM-generated SQL expressions may wrap mapped tables. Test adapters should match stable SQL metadata (such as table name) instead of relying on Python object identity.
 
+### SQLAlchemy UPDATE parameter names in the fake cursor persistence test
+
+- **Symptom:** After fixing the fake adapter's mapped-table identity check, scope persistence still failed. The fake test code attempted to read hard-coded compiled parameter names and misidentified the cursor value.
+- **Root cause:** SQLAlchemy generates bind parameter names based on the expression tree; those names are not a stable contract for the test adapter.
+- **Fix:** The fake now identifies bound values by type: the scope key is a non-UUID string, and the cursor is the dictionary value. This avoids depending on generated parameter names.
+- **Verification:** Committed as `45cd714`; awaiting local focused tests.
+- **Engineering lesson:** Avoid coupling tests to incidental SQLAlchemy bind names. Assert on semantic values instead.
+
 ## Open design / observability questions
 
 ### Remotive skipped-job count is not exposed to the runner
