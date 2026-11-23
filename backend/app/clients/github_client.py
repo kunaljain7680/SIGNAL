@@ -1,4 +1,4 @@
-import os
+from app.core.config import settings
 from typing import Any
 
 import httpx
@@ -21,7 +21,7 @@ class GitHubClient:
         http_client: httpx.AsyncClient | None = None,
         timeout: float = 20.0,
     ):
-        self.token = token if token is not None else os.getenv("SIGNAL_GITHUB_PAT")
+        self.token = token if token is not None else settings.SIGNAL_GITHUB_PAT
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
