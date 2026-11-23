@@ -120,6 +120,14 @@ class _FakeTransaction:
         return False
 
 
+def _looks_like_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+        return True
+    except ValueError:
+        return False
+
+
 class _FakeSession:
     def __init__(self, store: _FakeStore) -> None:
         self.store = store
@@ -174,8 +182,15 @@ class _FakeSession:
 
         if isinstance(statement, Update) and statement.table.name == Source.__tablename__:
             compiled = statement.compile(dialect=postgresql.dialect())
-            scope_key = compiled.params["jsonb_build_object_1"]
-            next_cursor = compiled.params["param_1"]
+            bound_values = list(compiled.params.values())
+            scope_key = next(
+                value
+                for value in bound_values
+                if isinstance(value, str) and not _looks_like_uuid(value)
+            )
+            next_cursor = next(
+                value for value in bound_values if isinstance(value, dict)
+            )
             self.store.source.cursor_state = {
                 **self.store.source.cursor_state,
                 scope_key: next_cursor,
