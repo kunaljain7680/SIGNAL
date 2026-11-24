@@ -151,7 +151,7 @@ class IngestionSchedulerTests(unittest.IsolatedAsyncioTestCase):
         store = _FakeStore(
             [
                 _source("Hacker News", "hn", 6 * 60 * 60, is_active=False),
-                _source("GitHub", "github", 24 * 60 * 60),
+                _source("Unregistered", "firebase", 24 * 60 * 60),
             ]
         )
 
