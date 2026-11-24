@@ -1,5 +1,6 @@
 import unittest
 
+from app.ingestion.connectors.github import GitHubConnector
 from app.ingestion.connectors.hn_algolia import HNAlgoliaConnector
 from app.ingestion.connectors.remotive import RemotiveConnector
 from app.ingestion.registry import (
@@ -10,10 +11,11 @@ from app.ingestion.registry import (
 
 
 class ConnectorRegistryTests(unittest.TestCase):
-    def test_registry_contains_approved_hn_and_remotive_connectors(self):
-        self.assertEqual(set(CONNECTORS), {"hn_algolia", "remotive"})
+    def test_registry_contains_hn_remotive_and_approved_github(self):
+        self.assertEqual(set(CONNECTORS), {"hn_algolia", "remotive", "github"})
         self.assertIsInstance(get_connector("hn_algolia"), HNAlgoliaConnector)
         self.assertIsInstance(get_connector("remotive"), RemotiveConnector)
+        self.assertIsInstance(get_connector("github"), GitHubConnector)
 
     def test_hn_connector_maps_to_existing_database_source(self):
         self.assertEqual(
@@ -27,8 +29,13 @@ class ConnectorRegistryTests(unittest.TestCase):
             ("Remotive", "jobs"),
         )
 
-    def test_github_draft_and_firebase_prototype_are_not_registered(self):
-        self.assertNotIn("github", CONNECTORS)
+    def test_github_connector_maps_to_seeded_database_source(self):
+        self.assertEqual(
+            CONNECTOR_SOURCE_IDENTITY["github"],
+            ("GitHub", "github"),
+        )
+
+    def test_firebase_prototype_is_not_registered(self):
         self.assertNotIn("firebase", CONNECTORS)
         self.assertNotIn("hn_firebase", CONNECTORS)
 
