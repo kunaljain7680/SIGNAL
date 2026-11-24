@@ -68,9 +68,9 @@ class GitHubScopeInventoryTests(unittest.TestCase):
             },
         )
 
-    def test_inventory_is_not_approved_for_live_fetching(self):
-        self.assertEqual(self.inventory["approval_status"], "draft")
-        self.assertTrue(self.inventory["owner_review_required"])
+    def test_inventory_is_owner_approved(self):
+        self.assertEqual(self.inventory["approval_status"], "approved")
+        self.assertFalse(self.inventory["owner_review_required"])
 
     def test_unverified_topic_scopes_are_not_guessed(self):
         self.assertTrue(
