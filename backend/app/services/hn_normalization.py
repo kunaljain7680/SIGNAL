@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.normalized_event import NormalizedEvent
+from app.models.source import Source
 from app.models.source_event import SourceEvent
 
 
@@ -52,14 +53,19 @@ async def normalize_hn_events(
     Normalizes the specified Hacker News SourceEvents and
     safely persists the resulting NormalizedEvents.
 
+    Only source events belonging to the Hacker News source are eligible.
+
     Returns the number of newly inserted rows.
     """
     if not source_event_ids:
         return 0
 
     result = await db.execute(
-        select(SourceEvent).where(
-            SourceEvent.id.in_(source_event_ids)
+        select(SourceEvent)
+        .join(Source, SourceEvent.source_id == Source.id)
+        .where(
+            SourceEvent.id.in_(source_event_ids),
+            Source.type == "hn",
         )
     )
     source_events = result.scalars().all()
