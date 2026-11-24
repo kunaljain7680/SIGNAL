@@ -1,3 +1,4 @@
+from app.ingestion.connectors.github import GitHubConnector
 from app.ingestion.connectors.hn_algolia import HNAlgoliaConnector
 from app.ingestion.connectors.remotive import RemotiveConnector
 from app.ingestion.contracts import SourceConnector
@@ -8,11 +9,13 @@ from app.ingestion.contracts import SourceConnector
 CONNECTORS: dict[str, SourceConnector] = {
     "hn_algolia": HNAlgoliaConnector(),
     "remotive": RemotiveConnector(),
+    "github": GitHubConnector(),
 }
 
 CONNECTOR_SOURCE_IDENTITY: dict[str, tuple[str, str]] = {
     "hn_algolia": ("Hacker News", "hn"),
     "remotive": ("Remotive", "jobs"),
+    "github": ("GitHub", "github"),
 }
 
 
