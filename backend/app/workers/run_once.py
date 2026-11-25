@@ -277,6 +277,27 @@ async def _persist_scope(
                 insert_result = await session.execute(statement)
                 inserted_count = max(0, int(insert_result.rowcount or 0))
 
+                # Capture discovery scope for both newly inserted and existing
+                # events, atomically with event persistence and cursor advance.
+                scope_association = pg_insert(SourceEventScope).from_select(
+                    ["source_event_id", "scope_key"],
+                    select(
+                        SourceEvent.id,
+                        literal(scope_key),
+                    ).where(
+                        SourceEvent.source_id == source_id,
+                        SourceEvent.source_native_id.in_(
+                            [event.source_native_id for event in events]
+                        ),
+                    ),
+                ).on_conflict_do_nothing(
+                    index_elements=[
+                        SourceEventScope.source_event_id,
+                        SourceEventScope.scope_key,
+                    ]
+                )
+                await session.execute(scope_association)
+
             # Merge in PostgreSQL rather than replacing a potentially stale
             # in-memory cursor_state map read before the HTTP request.
             cursor_merge = Source.cursor_state.op("||")(

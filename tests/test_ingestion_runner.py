@@ -187,6 +187,16 @@ class _FakeSession:
                     inserted += 1
             return _FakeResult(inserted)
 
+        if isinstance(statement, PostgreSQLInsert) and statement.table.name == "source_event_scopes":
+            params = statement.compile(dialect=postgresql.dialect()).params
+            scope_key = next(value for key, value in params.items() if key.startswith("param_") and isinstance(value, str))
+            native_ids = {value for key, value in params.items() if key.startswith("source_native_id") and isinstance(value, str)}
+            source_id = next(value for value in params.values() if isinstance(value, uuid.UUID))
+            for event_source_id, native_id in self.store.events:
+                if event_source_id == source_id and native_id in native_ids:
+                    self.store.scope_associations.add((event_source_id, native_id, scope_key))
+            return _FakeResult(0)
+
         if isinstance(statement, Update) and statement.table.name == Source.__tablename__:
             compiled = statement.compile(dialect=postgresql.dialect())
             bound_values = list(compiled.params.values())
@@ -304,6 +314,31 @@ class IngestionRunnerTests(unittest.IsolatedAsyncioTestCase):
             if getattr(statement, "_for_update_arg", None) is not None
         ]
         self.assertEqual(len(lock_queries), 2)
+
+    async def test_event_found_in_two_scopes_has_two_idempotent_associations(self):
+        shared = RawEvent("shared", {"id": "shared"})
+        connector = _FakeConnector(
+            {
+                "scope-a": FetchResult([shared], {"cursor": "a"}),
+                "scope-b": FetchResult([shared], {"cursor": "b"}),
+            },
+            scopes=["scope-a", "scope-b"],
+        )
+        first = await self.run_fake(connector)
+        self.assertEqual(first.status, "COMPLETED")
+        self.assertEqual(first.inserted_event_count, 1)
+        self.assertEqual(len(self.store.events), 1)
+        self.assertEqual(
+            self.store.scope_associations,
+            {
+                (self.store.source.id, "shared", "scope-a"),
+                (self.store.source.id, "shared", "scope-b"),
+            },
+        )
+        second = await self.run_fake(connector)
+        self.assertEqual(second.status, "COMPLETED")
+        self.assertEqual(second.inserted_event_count, 0)
+        self.assertEqual(len(self.store.scope_associations), 2)
 
     async def test_duplicate_events_are_ignored_by_database_conflict_rule(self):
         repeated = FetchResult(
