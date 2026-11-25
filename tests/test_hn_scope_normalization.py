@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 import uuid
 
 from sqlalchemy.dialects import postgresql
@@ -63,6 +63,53 @@ class TestHNScopedNormalization(unittest.IsolatedAsyncioTestCase):
         self.assertIn(source_event_id, insert_params.values())
         self.assertIn(first_technology_id, insert_params.values())
         self.assertIn("discussion_mention", insert_params.values())
+
+    async def test_large_pending_set_is_inserted_in_bounded_batches(self) -> None:
+        mock_db = AsyncMock()
+        technology_id = uuid.uuid4()
+        source_events = []
+
+        for _ in range(3):
+            source_event = MagicMock()
+            source_event.id = uuid.uuid4()
+            source_event.raw_payload = {
+                "title": "A useful HN story",
+                "created_at": "2026-11-25T12:00:00Z",
+                "url": "https://example.com/story",
+            }
+            source_events.append((source_event, technology_id))
+
+        selection_result = MagicMock()
+        selection_result.all.return_value = source_events
+
+        first_insert_result = MagicMock()
+        first_insert_result.rowcount = 2
+        second_insert_result = MagicMock()
+        second_insert_result.rowcount = 1
+        mock_db.execute.side_effect = [
+            selection_result,
+            first_insert_result,
+            second_insert_result,
+        ]
+
+        # Use a small batch size here to test the chunking path without
+        # constructing thousands of fixture events.
+        with patch(
+            "app.services.hn_normalization.NORMALIZATION_INSERT_BATCH_SIZE",
+            2,
+        ):
+            inserted = await normalize_hn_scoped_events(mock_db)
+
+        self.assertEqual(inserted, 3)
+        self.assertEqual(mock_db.execute.await_count, 3)
+        mock_db.commit.assert_awaited_once()
+
+        first_insert = mock_db.execute.await_args_list[1].args[0]
+        second_insert = mock_db.execute.await_args_list[2].args[0]
+        first_params = first_insert.compile(dialect=postgresql.dialect()).params
+        second_params = second_insert.compile(dialect=postgresql.dialect()).params
+        self.assertEqual(len(first_params), 12)
+        self.assertEqual(len(second_params), 6)
 
     async def test_no_scoped_pending_hn_events_does_not_commit(self) -> None:
         mock_db = AsyncMock()
