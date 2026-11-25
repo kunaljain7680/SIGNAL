@@ -1,5 +1,4 @@
 import unittest
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 import uuid
 
@@ -48,7 +47,6 @@ class TestHNScopedNormalization(unittest.IsolatedAsyncioTestCase):
         self.assertIn("join technologies", sql)
         self.assertIn("join sources", sql)
         self.assertIn("left outer join normalized_events", sql)
-        self.assertIn("source_events.type", sql) if False else None
         self.assertIn("source_event_scopes.recorded_at asc", sql)
         self.assertIn("source_event_scopes.scope_key asc", sql)
         self.assertIn("hn", compiled_select.params.values())
