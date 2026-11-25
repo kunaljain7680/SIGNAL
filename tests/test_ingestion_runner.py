@@ -171,22 +171,6 @@ class _FakeSession:
 
     async def execute(self, statement):
         self.store.statements.append(statement)
-        if isinstance(statement, PostgreSQLInsert):
-            self.assert_event_insert(statement)
-            inserted = 0
-            for row in statement._multi_values[0]:
-                # SQLAlchemy's multi-VALUES dictionaries use Column objects
-                # as keys, not string column names.
-                values = {
-                    column.key: value
-                    for column, value in row.items()
-                }
-                key = (values["source_id"], values["source_native_id"])
-                if key not in self.store.events:
-                    self.store.events[key] = values["raw_payload"]
-                    inserted += 1
-            return _FakeResult(inserted)
-
         if isinstance(statement, PostgreSQLInsert) and statement.table.name == "source_event_scopes":
             params = statement.compile(dialect=postgresql.dialect()).params
             scope_key = next(value for key, value in params.items() if key.startswith("param_") and isinstance(value, str))
@@ -196,6 +180,17 @@ class _FakeSession:
                 if event_source_id == source_id and native_id in native_ids:
                     self.store.scope_associations.add((event_source_id, native_id, scope_key))
             return _FakeResult(0)
+
+        if isinstance(statement, PostgreSQLInsert):
+            self.assert_event_insert(statement)
+            inserted = 0
+            for row in statement._multi_values[0]:
+                values = {column.key: value for column, value in row.items()}
+                key = (values["source_id"], values["source_native_id"])
+                if key not in self.store.events:
+                    self.store.events[key] = values["raw_payload"]
+                    inserted += 1
+            return _FakeResult(inserted)
 
         if isinstance(statement, Update) and statement.table.name == Source.__tablename__:
             compiled = statement.compile(dialect=postgresql.dialect())

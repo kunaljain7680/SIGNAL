@@ -4,12 +4,14 @@ from app.models.technology_alias import TechnologyAlias
 from app.models.ingestion_run import IngestionRun
 from app.models.source import Source
 from app.models.source_event import SourceEvent
+from app.models.source_event_scope import SourceEventScope
 from app.models.technology import Technology
 
 __all__ = [
     "Technology",
     "Source",
     "SourceEvent",
+    "SourceEventScope",
     "NormalizedEvent",
     "SignalSnapshot",
     "TechnologyAlias",
