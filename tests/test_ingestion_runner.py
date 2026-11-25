@@ -53,6 +53,7 @@ class _FakeStore:
         self.runs: dict[uuid.UUID, IngestionRun] = {}
         self.run_order: list[uuid.UUID] = []
         self.events: dict[tuple[uuid.UUID, str], dict[str, Any]] = {}
+        self.scope_associations: set[tuple[uuid.UUID, str, str]] = set()
         self.statements: list[Any] = []
         self.commit_attempts = 0
         self.fail_commit_at = fail_commit_at
@@ -66,6 +67,7 @@ class _FakeStore:
             "last_run_at": self.source.last_run_at,
             "health_status": self.source.health_status,
             "events": dict(self.events),
+            "scope_associations": set(self.scope_associations),
             "runs": dict(self.runs),
             "run_order": list(self.run_order),
             "run_fields": {
@@ -85,6 +87,7 @@ class _FakeStore:
         self.source.last_run_at = snapshot["last_run_at"]
         self.source.health_status = snapshot["health_status"]
         self.events = snapshot["events"]
+        self.scope_associations = snapshot["scope_associations"]
         self.runs = snapshot["runs"]
         self.run_order = snapshot["run_order"]
         for run_id, fields in snapshot["run_fields"].items():
@@ -506,6 +509,7 @@ class IngestionRunnerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(outcome.status, "FAILED")
         self.assertIn("simulated database commit failure", outcome.error_message)
         self.assertEqual(self.store.events, {})
+        self.assertEqual(self.store.scope_associations, set())
         self.assertEqual(self.store.source.cursor_state, {})
         self.assertEqual(self.store.source.health_status, "degraded")
 
