@@ -12,6 +12,11 @@ from app.models.source_event_scope import SourceEventScope
 from app.models.technology import Technology
 
 
+# Keep each multi-row INSERT comfortably below PostgreSQL's 65,535
+# bind-parameter limit (six parameters are written per normalized event).
+NORMALIZATION_INSERT_BATCH_SIZE = 1_000
+
+
 def normalize_hn_event(
     source_event: SourceEvent,
     technology_id: uuid.UUID,
@@ -179,12 +184,18 @@ async def normalize_hn_scoped_events(db: AsyncSession) -> int:
     if not normalized_records:
         return 0
 
-    insert_statement = insert(NormalizedEvent).values(normalized_records)
-    insert_statement = insert_statement.on_conflict_do_nothing(
-        index_elements=["source_event_id"]
-    )
+    inserted_count = 0
 
-    insert_result = await db.execute(insert_statement)
+    for start in range(0, len(normalized_records), NORMALIZATION_INSERT_BATCH_SIZE):
+        batch = normalized_records[start : start + NORMALIZATION_INSERT_BATCH_SIZE]
+        insert_statement = insert(NormalizedEvent).values(batch)
+        insert_statement = insert_statement.on_conflict_do_nothing(
+            index_elements=["source_event_id"]
+        )
+
+        insert_result = await db.execute(insert_statement)
+        inserted_count += max(0, int(insert_result.rowcount or 0))
+
     await db.commit()
 
-    return max(0, int(insert_result.rowcount or 0))
+    return inserted_count
