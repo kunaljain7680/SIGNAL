@@ -177,7 +177,16 @@ class _FakeSession:
         if isinstance(statement, PostgreSQLInsert) and statement.table.name == "source_event_scopes":
             params = statement.compile(dialect=postgresql.dialect()).params
             scope_key = next(value for key, value in params.items() if key.startswith("param_") and isinstance(value, str))
-            native_ids = {value for key, value in params.items() if key.startswith("source_native_id") and isinstance(value, str)}
+            native_ids: set[str] = set()
+            for key, value in params.items():
+                if not key.startswith("source_native_id"):
+                    continue
+                if isinstance(value, str):
+                    native_ids.add(value)
+                elif isinstance(value, (list, tuple, set)):
+                    native_ids.update(
+                        item for item in value if isinstance(item, str)
+                    )
             source_id = next(value for value in params.values() if isinstance(value, uuid.UUID))
             for event_source_id, native_id in self.store.events:
                 if event_source_id == source_id and native_id in native_ids:
