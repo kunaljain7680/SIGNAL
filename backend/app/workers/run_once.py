@@ -24,6 +24,7 @@ from app.ingestion.registry import CONNECTORS, CONNECTOR_SOURCE_IDENTITY, get_co
 from app.models.ingestion_run import IngestionRun
 from app.models.source import Source
 from app.models.source_event import SourceEvent
+from app.models.source_event_scope import SourceEventScope
 
 
 logger = logging.getLogger(__name__)
