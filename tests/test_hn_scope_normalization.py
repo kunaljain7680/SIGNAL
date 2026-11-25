@@ -60,21 +60,9 @@ class TestHNScopedNormalization(unittest.IsolatedAsyncioTestCase):
         )
 
         rows = insert_statement._multi_values[0][0]
-        values_by_column = {
-            column.key: value for column, value in rows.items()
-        }
-        self.assertEqual(
-            values_by_column["source_event_id"],
-            source_event_id,
-        )
-        self.assertEqual(
-            values_by_column["technology_id"],
-            first_technology_id,
-        )
-        self.assertEqual(
-            values_by_column["event_type"],
-            "discussion_mention",
-        )
+        self.assertEqual(rows["source_event_id"], source_event_id)
+        self.assertEqual(rows["technology_id"], first_technology_id)
+        self.assertEqual(rows["event_type"], "discussion_mention")
 
     async def test_no_scoped_pending_hn_events_does_not_commit(self) -> None:
         mock_db = AsyncMock()
